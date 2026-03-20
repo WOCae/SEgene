@@ -1,5 +1,6 @@
 import { state } from './se-state.js';
 import { initAudio, audioCtx, masterGain, playSEOnCtx } from './se-audio-engine.js';
+import { scheduleSessionSave } from './se-db.js';
 
 export const PSEQ = {
   bpm: 120,
@@ -91,6 +92,7 @@ function pseqRenderGrid() {
       fill.style.height = (N > 0 ? idx / N * 100 : 50) + '%';
       const n = PSEQ.scaleNotes[idx];
       label.textContent = n ? n.label : '';
+      scheduleSessionSave();
     };
 
     wrap.addEventListener('mousedown', (e) => { dragging = true; onMove(e.clientY); e.preventDefault(); });
@@ -106,6 +108,7 @@ function pseqRenderGrid() {
       if (PSEQ.mutedSteps.has(s)) PSEQ.mutedSteps.delete(s);
       else PSEQ.mutedSteps.add(s);
       lane.classList.toggle('muted', PSEQ.mutedSteps.has(s));
+      scheduleSessionSave();
     });
 
     lane.appendChild(wrap);
@@ -174,8 +177,8 @@ function pseqRestart() {
   PSEQ.intervalId = setInterval(pseqTick, ms);
 }
 
-export function pseqBpmChange(v) { PSEQ.bpm = parseInt(v); document.getElementById('vPseqBpm').textContent = v; pseqRestart(); }
-export function pseqDivChange() { PSEQ.div = parseInt(document.getElementById('pseqDiv').value); pseqRestart(); }
+export function pseqBpmChange(v) { PSEQ.bpm = parseInt(v); document.getElementById('vPseqBpm').textContent = v; pseqRestart(); scheduleSessionSave(); }
+export function pseqDivChange() { PSEQ.div = parseInt(document.getElementById('pseqDiv').value); pseqRestart(); scheduleSessionSave(); }
 
 export function pseqLenChange() {
   const was = PSEQ.playing;
@@ -185,6 +188,7 @@ export function pseqLenChange() {
   PSEQ.len = newLen;
   pseqRenderGrid();
   if (was) pseqStart();
+  scheduleSessionSave();
 }
 
 export function pseqQuick(type) {
@@ -201,6 +205,7 @@ export function pseqQuick(type) {
   }
   PSEQ.mutedSteps.clear();
   pseqRenderGrid();
+  scheduleSessionSave();
 }
 
 export function pseqToggleMute() {
@@ -209,6 +214,7 @@ export function pseqToggleMute() {
   PSEQ.mutedSteps.clear();
   if (!allMuted) for (let s = 1; s < PSEQ.len; s += 2) PSEQ.mutedSteps.add(s);
   pseqRenderGrid();
+  scheduleSessionSave();
 }
 
 export function togglePseq(on) {

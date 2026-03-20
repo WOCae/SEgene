@@ -1,5 +1,6 @@
 import { state, app } from './se-state.js';
 import { showToast } from './se-toast.js';
+import { t } from './se-i18n.js';
 
 let audioCtx = null;
 let analyser = null;
@@ -206,7 +207,7 @@ export async function exportOGG() {
   initAudio();
   const AudioRec = window.MediaRecorder;
   if (!AudioRec) {
-    showToast('OGG出力: MediaRecorder が利用できません');
+    showToast(t('toast.oggNoMediaRecorder'));
     return;
   }
 
@@ -222,7 +223,7 @@ export async function exportOGG() {
     } catch {}
   }
   if (!mimeType) {
-    showToast('OGG出力: 対応する mimeType が見つかりません');
+    showToast(t('toast.oggNoMimeType'));
     return;
   }
 
@@ -243,7 +244,7 @@ export async function exportOGG() {
   try {
     recorder = new AudioRec(recorderDest.stream, { mimeType });
   } catch (e) {
-    showToast('OGG出力: MediaRecorder初期化に失敗しました');
+    showToast(t('toast.oggInitFailed'));
     return;
   }
 
@@ -266,7 +267,7 @@ export async function exportOGG() {
 
   await done;
   if (!chunks.length) {
-    showToast('OGG出力: 録音データが空でした');
+    showToast(t('toast.oggEmpty'));
     return;
   }
 

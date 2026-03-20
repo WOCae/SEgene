@@ -400,4 +400,32 @@
       max-width: calc(100vw - 24px);
       text-align: center;
     }
+
+    /* ── Sidebar (プリセット): 内側リストのみスクロール ── */
+    .sidebar-header,
+    .cat-tabs {
+      flex-shrink: 0;
+    }
+    .preset-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      /* フッター(~96px)に隠れないよう末尾に余白 */
+      padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* ── Panel (出力・設定): シート全体をスクロール可能に ── */
+    .panel {
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      /* フッターに隠れないよう末尾に余白 */
+      padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* PLAYBACK セクション(再生・音量)はモバイルフッターと重複するため非表示 */
+    .panel > div:first-child {
+      display: none;
+    }
   }

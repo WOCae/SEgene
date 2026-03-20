@@ -2,6 +2,7 @@ import { state, app } from './se-state.js';
 import { initAudio, audioCtx, analyser, masterGain, playSEOnCtx } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
 import { updateParam, syncVolumeSlider } from './se-editor-ui.js';
+import { t } from './se-i18n.js';
 
 export const CMP = {
   slots: [],
@@ -17,10 +18,10 @@ function cmpSnapshotState() {
 }
 
 export function cmpAddSlot(params, name) {
-  if (CMP.slots.length >= CMP.maxSlots) { showToast('スロットは最大4つです'); return; }
+  if (CMP.slots.length >= CMP.maxSlots) { showToast(t('toast.maxSlots')); return; }
   const p = params || cmpSnapshotState();
   const id = Date.now() + Math.random();
-  CMP.slots.push({ id, name: name || ('スロット ' + SLOT_LABELS[CMP.slots.length]), params: p, animId: null });
+  CMP.slots.push({ id, name: name || t('cmp.slot', SLOT_LABELS[CMP.slots.length]), params: p, animId: null });
   cmpRender();
 }
 
@@ -61,9 +62,9 @@ export function cmpLoadToEditor(id) {
   syncVolumeSlider();
 
   document.getElementById('presetInfoName').textContent = slot.name;
-  document.getElementById('presetInfoDesc').textContent = '比較スロットから読み込み';
+  document.getElementById('presetInfoDesc').textContent = t('info.fromCmp');
   closeCompare();
-  showToast('「' + slot.name + '」をエディタに読み込みました');
+  showToast(t('toast.loadedToEditor', slot.name));
 }
 
 export function cmpPlaySlot(id) {
@@ -127,7 +128,7 @@ function cmpDrawWaveform(slotId) {
 }
 
 export function cmpPlayAll() {
-  if (!CMP.slots.length) { showToast('スロットがありません'); return; }
+  if (!CMP.slots.length) { showToast(t('toast.noSlots')); return; }
   initAudio();
   if (audioCtx.state === 'suspended') audioCtx.resume();
 
@@ -143,7 +144,7 @@ export function cmpPlayAll() {
 }
 
 export function cmpPlaySequential() {
-  if (!CMP.slots.length) { showToast('スロットがありません'); return; }
+  if (!CMP.slots.length) { showToast(t('toast.noSlots')); return; }
   if (CMP.seqTimer) { clearTimeout(CMP.seqTimer); CMP.seqTimer = null; }
 
   initAudio();
@@ -201,9 +202,9 @@ function cmpRender() {
         <div class="cmp-param-mini"><div class="cmp-param-mini-label">DUR</div><div class="cmp-param-mini-val">${(p.duration / 1000).toFixed(2)}s</div></div>
       </div>
       <div class="cmp-slot-actions">
-        <button class="cmp-act-btn play-btn" onclick="cmpPlaySlot(${slot.id})">▶ 再生</button>
-        <button class="cmp-act-btn capture-btn" onclick="cmpCaptureSlot(${slot.id})">⊙ キャプチャ</button>
-        <button class="cmp-act-btn load-btn" onclick="cmpLoadToEditor(${slot.id})">↗ エディタへ</button>
+        <button class="cmp-act-btn play-btn" onclick="cmpPlaySlot(${slot.id})">${t('cmp.playBtn')}</button>
+        <button class="cmp-act-btn capture-btn" onclick="cmpCaptureSlot(${slot.id})">${t('cmp.captureBtn')}</button>
+        <button class="cmp-act-btn load-btn" onclick="cmpLoadToEditor(${slot.id})">${t('cmp.loadBtn')}</button>
         <button class="cmp-act-btn del-btn" onclick="cmpDeleteSlot(${slot.id})">✕</button>
       </div>`;
     body.appendChild(div);
@@ -214,14 +215,14 @@ function cmpRender() {
     const empty = document.createElement('div');
     empty.className = 'cmp-empty-slot';
     empty.onclick = () => cmpAddSlot();
-    empty.innerHTML = `<div class="cmp-empty-icon">＋</div><div class="cmp-empty-label">現在の設定を追加</div>`;
+    empty.innerHTML = `<div class="cmp-empty-icon">＋</div><div class="cmp-empty-label">${t('cmp.emptyAdd')}</div>`;
     body.appendChild(empty);
   }
 }
 
 export function openCompare() {
   // Auto-add current state if no slots yet
-  if (CMP.slots.length === 0) cmpAddSlot(cmpSnapshotState(), app.activePreset || '現在の設定');
+  if (CMP.slots.length === 0) cmpAddSlot(cmpSnapshotState(), app.activePreset || t('cmp.currentSettings'));
   cmpRender();
   document.getElementById('cmpOverlay').classList.add('open');
 }
@@ -229,4 +230,9 @@ export function openCompare() {
 export function closeCompare() {
   document.getElementById('cmpOverlay').classList.remove('open');
 }
+
+// Re-render slot buttons when language changes
+document.addEventListener('se:langchange', () => {
+  if (document.getElementById('cmpOverlay')?.classList.contains('open')) cmpRender();
+});
 

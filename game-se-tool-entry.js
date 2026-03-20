@@ -1,4 +1,4 @@
-import { renderPresets, loadPreset, setCategory, setWave, updateParam, updateVolume, updateFilter, randomize, syncVolumeSlider } from './se-editor-ui.js';
+import { renderPresets, loadPreset, setCategory, setWave, updateParam, updateVolume, updateFilter, randomize, syncVolumeSlider, applyStateToUI } from './se-editor-ui.js';
 import { drawWaveform, playSE, exportWAV, exportOGG, registerExportStopHandlers } from './se-audio-engine.js';
 import { openManager, closeManager, saveCurrentPreset, exportAllJSON, exportSingleJSON, importJSON, loadUserPreset, deleteUserPreset } from './se-json-manager.js';
 import { openCompare, closeCompare, cmpPlayAll, cmpPlaySequential, cmpAddSlot, cmpPlaySlot, cmpCaptureSlot, cmpLoadToEditor, cmpDeleteSlot } from './se-compare.js';
@@ -6,7 +6,9 @@ import { ARP, arpBpmChange, arpDivChange, arpStepsChange, arpStart, arpStop, arp
 import { PSEQ, pseqBpmChange, pseqDivChange, pseqLenChange, pseqStart, pseqStop, pseqRebuild, pseqQuick, pseqToggleMute, togglePseq, initPseq } from './se-pseq.js';
 import { tbAdd, tbClearAll, tbPlay, tbLoadToEditor, tbDelete, tbDragStart, tbDragEnd, tbDragOver, tbDrop, tbRenameCard, initTb } from './se-temp-board.js';
 import { showToast } from './se-toast.js';
-import { app } from './se-state.js';
+import { state, app } from './se-state.js';
+import { setSessionSaver, dbSaveSession, dbRestoreSession, migrateFromLocalStorage, scheduleSessionSave } from './se-db.js';
+import { t, setLang, getLang, applyI18n } from './se-i18n.js';
 
 // exportOGG 用: 録音中の混在を避けるために、必要なら ARP/PSEQ を停止
 registerExportStopHandlers({
@@ -20,6 +22,10 @@ function openHelp() {
   const overlay = document.getElementById('helpOverlay');
   if (!overlay) return;
   overlay.classList.add('open');
+}
+
+function toggleLang() {
+  setLang(getLang() === 'ja' ? 'en' : 'ja');
 }
 
 function closeHelp() {
@@ -53,8 +59,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 't' || e.key === 'T') { tbAdd(); }
 
   if (e.key === 'c' || e.key === 'C') {
-    cmpAddSlot(null, app.activePreset || '設定');
-    showToast('比較スロットに追加しました');
+    cmpAddSlot(null, app.activePreset || t('info.defaultSetting'));
+    showToast(t('toast.cmpAdded'));
   }
 
   if (e.key === 'a' || e.key === 'A') ARP.playing ? arpStop() : arpStart();
@@ -76,6 +82,7 @@ Object.assign(window, {
   closeCompare,
   openHelp,
   closeHelp,
+  toggleLang,
   saveCurrentPreset,
   exportAllJSON,
   importJSON,
@@ -239,6 +246,7 @@ function initPanelResizers() {
     activePointerId = null;
     layout.classList.remove('is-resizing');
     document.body.style.cursor = '';
+    scheduleSessionSave();
   };
 
   const startDrag = (which) => (e) => {
@@ -302,12 +310,152 @@ function initTheme() {
 
 initTheme();
 
-// Init
-renderPresets();
-drawWaveform();
-initArp();
-initPseq();
-initTb();
-syncVolumeSlider();
-requestAnimationFrame(() => syncVolumeSlider());
+// ---------- Session: データ収集 ----------
+
+function collectSession() {
+  const layout = document.getElementById('appLayout');
+  let leftW = 260, rightW = 280;
+  if (layout) {
+    const cols = getComputedStyle(layout).gridTemplateColumns.split(' ');
+    leftW = parseFloat(cols[0]) || 260;
+    rightW = parseFloat(cols[cols.length - 1]) || 280;
+  }
+
+  return {
+    state: { ...state },
+    currentCategory: app.currentCategory,
+    activePreset: app.activePreset,
+    panelCols: { leftW, rightW },
+    arp: {
+      bpm:   ARP.bpm,
+      div:   ARP.div,
+      steps: ARP.steps,
+      grid:  ARP.grid.map(row => [...row]),
+      scale: document.getElementById('arpScale')?.value  || 'major',
+      root:  document.getElementById('arpRoot')?.value   || '69',
+      oct:   document.getElementById('arpOct')?.value    || '4',
+    },
+    pseq: {
+      bpm:        PSEQ.bpm,
+      div:        PSEQ.div,
+      len:        PSEQ.len,
+      steps:      PSEQ.steps.map(s => ({ ...s })),
+      mutedSteps: [...PSEQ.mutedSteps],
+      scale: document.getElementById('pseqScale')?.value || 'major',
+      root:  document.getElementById('pseqRoot')?.value  || '60',
+      oct:   document.getElementById('pseqOct')?.value   || '4',
+      range: document.getElementById('pseqRange')?.value || '2',
+    },
+  };
+}
+
+// ---------- Session: 復元 ----------
+
+async function restoreSessionData(session) {
+  // SE パラメータ
+  if (session.state) {
+    Object.assign(state, session.state);
+    applyStateToUI();
+  }
+
+  // カテゴリ
+  if (session.currentCategory) {
+    app.currentCategory = session.currentCategory;
+    app.activePreset = session.activePreset ?? null;
+    renderPresets();
+    document.querySelectorAll('.cat-tab').forEach(b => {
+      ['8bit', 'real', 'ui', 'env'].forEach(c => b.classList.remove('active-' + c));
+    });
+    const catBtn = [...document.querySelectorAll('.cat-tab')]
+      .find(b => b.getAttribute('onclick')?.includes(`'${session.currentCategory}'`));
+    if (catBtn) catBtn.classList.add('active-' + session.currentCategory);
+
+    // プリセット名表示
+    if (session.activePreset) {
+      const infoName = document.getElementById('presetInfoName');
+      const infoDesc = document.getElementById('presetInfoDesc');
+      if (infoName) infoName.textContent = session.activePreset;
+      if (infoDesc) infoDesc.textContent = t('info.restoredSession');
+    }
+  }
+
+  // パネル幅
+  if (session.panelCols) {
+    const layout = document.getElementById('appLayout');
+    if (layout) {
+      const { leftW, rightW } = session.panelCols;
+      layout.style.gridTemplateColumns = `${leftW}px 8px 1fr 8px ${rightW}px`;
+    }
+  }
+
+  // ARP
+  if (session.arp) {
+    const a = session.arp;
+    if (a.bpm   != null) ARP.bpm   = a.bpm;
+    if (a.div   != null) ARP.div   = a.div;
+    if (a.steps != null) ARP.steps = a.steps;
+    if (a.grid)          ARP.grid  = a.grid.map(row => [...row]);
+
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    setVal('arpBpm',   a.bpm);
+    setVal('arpDiv',   a.div);
+    setVal('arpSteps', a.steps);
+    setVal('arpScale', a.scale);
+    setVal('arpRoot',  a.root);
+    setVal('arpOct',   a.oct);
+    const vBpm = document.getElementById('vArpBpm');
+    if (vBpm) vBpm.textContent = ARP.bpm;
+    arpRebuildNotes(); // DOM 値を読んでグリッド再描画
+  }
+
+  // PSEQ
+  if (session.pseq) {
+    const p = session.pseq;
+    if (p.bpm  != null) PSEQ.bpm = p.bpm;
+    if (p.div  != null) PSEQ.div = p.div;
+    if (p.len  != null) PSEQ.len = p.len;
+    if (p.steps)        PSEQ.steps = p.steps.map(s => ({ ...s }));
+    if (p.mutedSteps)   PSEQ.mutedSteps = new Set(p.mutedSteps);
+
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    setVal('pseqBpm',   p.bpm);
+    setVal('pseqDiv',   p.div);
+    setVal('pseqLen',   p.len);
+    setVal('pseqScale', p.scale);
+    setVal('pseqRoot',  p.root);
+    setVal('pseqOct',   p.oct);
+    setVal('pseqRange', p.range);
+    const vBpm = document.getElementById('vPseqBpm');
+    if (vBpm) vBpm.textContent = PSEQ.bpm;
+    pseqRebuild(); // DOM 値を読んでグリッド再描画
+  }
+}
+
+// ---------- Init (async) ----------
+
+(async () => {
+  // 旧 localStorage データを IDB に移行（初回のみ）
+  await migrateFromLocalStorage();
+
+  // デフォルト状態で初期化
+  renderPresets();
+  initArp();
+  initPseq();
+  await initTb();
+
+  // IDB からセッション復元（あれば上書き）
+  const session = await dbRestoreSession();
+  if (session) await restoreSessionData(session);
+
+  drawWaveform();
+  syncVolumeSlider();
+  requestAnimationFrame(() => syncVolumeSlider());
+
+  // Apply initial language translations
+  applyI18n();
+  document.documentElement.lang = getLang();
+
+  // 復元完了後にセッションセーバーを登録（復元中の誤保存を防ぐ）
+  setSessionSaver(() => dbSaveSession(collectSession()));
+})();
 

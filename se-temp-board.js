@@ -2,8 +2,9 @@ import { state, app } from './se-state.js';
 import { initAudio, audioCtx, masterGain, playSEOnCtx } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
 import { updateParam, syncVolumeSlider } from './se-editor-ui.js';
+import { dbGetTempBoard, dbSaveTempBoard } from './se-db.js';
+import { t } from './se-i18n.js';
 
-const TB_KEY = 'gameSETempBoard';
 const WAVE_SHORT = { square: 'SQR', sine: 'SIN', sawtooth: 'SAW', triangle: 'TRI', noise: 'NSE' };
 
 let tbCards = []; // [{ id, name, params, color }]
@@ -12,14 +13,7 @@ let tbDragOverId = null;
 const TB_COLORS = ['#6c63ff', '#40c4aa', '#ffb74d', '#ff6b6b', '#39d98a', '#f06292', '#9c94ff', '#80cbc4'];
 
 function tbPersist() {
-  try { localStorage.setItem(TB_KEY, JSON.stringify(tbCards)); } catch {}
-}
-
-function tbLoad() {
-  try {
-    const d = JSON.parse(localStorage.getItem(TB_KEY) || '[]');
-    tbCards = Array.isArray(d) ? d : [];
-  } catch { tbCards = []; }
+  dbSaveTempBoard(tbCards); // fire and forget
 }
 
 export function tbAdd(params, name) {
@@ -29,7 +23,7 @@ export function tbAdd(params, name) {
   tbCards.push({ id: Date.now() + Math.random(), name: n, params: p, color });
   tbPersist();
   tbRender();
-  showToast(`「${n}」を一時保存しました`);
+  showToast(t('toast.tbSaved', n));
 }
 
 export function tbDelete(id) {
@@ -43,7 +37,7 @@ export function tbClearAll() {
   tbCards = [];
   tbPersist();
   tbRender();
-  showToast('一時保存を全消去しました');
+  showToast(t('toast.tbCleared'));
 }
 
 export function tbPlay(id) {
@@ -93,8 +87,8 @@ export function tbLoadToEditor(id) {
   syncVolumeSlider();
 
   document.getElementById('presetInfoName').textContent = card.name;
-  document.getElementById('presetInfoDesc').textContent = 'Temp Boardから読み込み';
-  showToast(`「${card.name}」をエディタに読み込みました`);
+  document.getElementById('presetInfoDesc').textContent = t('info.fromTb');
+  showToast(t('toast.loadedToEditor', card.name));
 }
 
 export function tbRenameCard(id, newName) {
@@ -147,7 +141,7 @@ function tbRender() {
   if (!list) return;
 
   if (!tbCards.length) {
-    list.innerHTML = '<div class="tboard-empty" onclick="tbAdd()">クリックして現在の設定を保存</div>';
+    list.innerHTML = `<div class="tboard-empty" onclick="tbAdd()">${t('tb.empty')}</div>`;
     return;
   }
 
@@ -170,7 +164,7 @@ function tbRender() {
     >
       <div class="tcard-playing-line" id="tb-line-${card.id}" style="background:${card.color}"></div>
       <div class="tcard-top">
-        <span class="tcard-drag-handle" title="ドラッグして並べ替え">⠿</span>
+        <span class="tcard-drag-handle" title="${t('tb.dragHandle')}">⠿</span>
         <span
           class="tcard-name"
           contenteditable="true"
@@ -182,16 +176,19 @@ function tbRender() {
       </div>
       <div class="tcard-tags">${tags.map(t => `<span class="tcard-tag">${t}</span>`).join('')}</div>
       <div class="tcard-actions">
-        <button class="tcard-btn play" onclick="tbPlay(${card.id})">▶ 再生</button>
-        <button class="tcard-btn" onclick="tbLoadToEditor(${card.id})">↗ 編集</button>
+        <button class="tcard-btn play" onclick="tbPlay(${card.id})">${t('tb.playBtn')}</button>
+        <button class="tcard-btn" onclick="tbLoadToEditor(${card.id})">${t('tb.editBtn')}</button>
         <button class="tcard-btn del" onclick="tbDelete(${card.id})">✕</button>
       </div>
     </div>`;
   }).join('');
 }
 
-export function initTb() {
-  tbLoad();
+export async function initTb() {
+  tbCards = await dbGetTempBoard();
   tbRender();
 }
+
+// Re-render cards when language changes
+document.addEventListener('se:langchange', () => tbRender());
 

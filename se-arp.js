@@ -1,5 +1,6 @@
 import { state } from './se-state.js';
 import { initAudio, audioCtx, masterGain, playSEOnCtx } from './se-audio-engine.js';
+import { scheduleSessionSave } from './se-db.js';
 
 export const ARP = {
   bpm: 140,
@@ -50,6 +51,7 @@ function arpRenderGrid() {
         ARP.grid[r][s] = !ARP.grid[r][s];
         cell.className = 'arp-step ' + (ARP.grid[r][s] ? 'note-on' : 'note-off');
         cell.dataset.row = r;
+        scheduleSessionSave();
       };
       row.appendChild(cell);
     }
@@ -118,8 +120,8 @@ function arpRestart() {
   ARP.intervalId = setInterval(arpStepInterval, ms);
 }
 
-export function arpBpmChange(val) { ARP.bpm = parseInt(val); document.getElementById('vArpBpm').textContent = val; arpRestart(); }
-export function arpDivChange() { ARP.div = parseInt(document.getElementById('arpDiv').value); arpRestart(); }
+export function arpBpmChange(val) { ARP.bpm = parseInt(val); document.getElementById('vArpBpm').textContent = val; arpRestart(); scheduleSessionSave(); }
+export function arpDivChange() { ARP.div = parseInt(document.getElementById('arpDiv').value); arpRestart(); scheduleSessionSave(); }
 
 export function arpStepsChange() {
   const was = ARP.playing;
@@ -134,19 +136,21 @@ export function arpStepsChange() {
 
   arpRenderGrid();
   if (was) arpStart();
+  scheduleSessionSave();
 }
 
 export function arpPattern(type) {
   const steps = ARP.steps;
   ARP.grid = Array.from({ length: 4 }, () => new Array(steps).fill(false));
 
-  if (type === 'clear') { arpRenderGrid(); return; }
+  if (type === 'clear') { arpRenderGrid(); scheduleSessionSave(); return; }
   if (type === 'up') { for (let s = 0; s < steps; s++) ARP.grid[s % 4][s] = true; }
   else if (type === 'down') { for (let s = 0; s < steps; s++) ARP.grid[3 - (s % 4)][s] = true; }
   else if (type === 'updown') { const seq = [0, 1, 2, 3, 2, 1]; for (let s = 0; s < steps; s++) ARP.grid[seq[s % seq.length]][s] = true; }
   else if (type === 'rand') { for (let s = 0; s < steps; s++) ARP.grid[Math.floor(Math.random() * 4)][s] = true; }
 
   arpRenderGrid();
+  scheduleSessionSave();
 }
 
 export function initArp() {

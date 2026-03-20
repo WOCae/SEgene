@@ -2,24 +2,15 @@ import { state } from './se-state.js';
 import { playSE, masterGain } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
 import { updateParam, syncVolumeSlider } from './se-editor-ui.js';
+import { dbGetUserPresets, dbSaveUserPresets } from './se-db.js';
+import { t, getLang } from './se-i18n.js';
 
-const STORAGE_KEY = 'gameSEUserPresets';
-
-function getUserPresets() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-  catch { return []; }
-}
-
-function saveUserPresets(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
-
-function renderSavedPresets() {
-  const list = getUserPresets();
+async function renderSavedPresets() {
+  const list = await dbGetUserPresets();
   const el = document.getElementById('savedPresetList');
 
   if (!list.length) {
-    el.innerHTML = '<div class="empty-msg">保存済みプリセットはありません</div>';
+    el.innerHTML = `<div class="empty-msg">${t('preset.empty')}</div>`;
     return;
   }
 
@@ -29,23 +20,23 @@ function renderSavedPresets() {
         <div class="saved-preset-name">${p.name}</div>
         <div class="saved-preset-meta">${p.savedAt} &nbsp;·&nbsp; ${p.params.wave} / ${p.params.frequency}Hz</div>
       </div>
-      <button class="btn-sm load" onclick="loadUserPreset(${p.id})">読込</button>
+      <button class="btn-sm load" onclick="loadUserPreset(${p.id})">${t('preset.load')}</button>
       <button class="btn-sm" onclick="exportSingleJSON(${p.id})">⬇</button>
-      <button class="btn-sm del" onclick="deleteUserPreset(${p.id})">削除</button>
+      <button class="btn-sm del" onclick="deleteUserPreset(${p.id})">${t('preset.delete')}</button>
     </div>
   `).join('');
 }
 
-export function saveCurrentPreset() {
+export async function saveCurrentPreset() {
   const nameEl = document.getElementById('savePresetName');
   const name = nameEl.value.trim();
-  if (!name) { showToast('名前を入力してください'); return; }
+  if (!name) { showToast(t('toast.nameRequired')); return; }
 
-  const list = getUserPresets();
+  const list = await dbGetUserPresets();
   const entry = {
     id: Date.now(),
     name,
-    savedAt: new Date().toLocaleString('ja-JP'),
+    savedAt: new Date().toLocaleString(t('locale')),
     params: { ...state }
   };
 
@@ -53,21 +44,22 @@ export function saveCurrentPreset() {
   const idx = list.findIndex(p => p.name === name);
   if (idx >= 0) list[idx] = entry; else list.push(entry);
 
-  saveUserPresets(list);
+  await dbSaveUserPresets(list);
   nameEl.value = '';
-  renderSavedPresets();
-  showToast('「' + name + '」を保存しました');
+  await renderSavedPresets();
+  showToast(t('toast.saved', name));
 }
 
-export function deleteUserPreset(id) {
-  const list = getUserPresets().filter(p => p.id !== id);
-  saveUserPresets(list);
-  renderSavedPresets();
-  showToast('削除しました');
+export async function deleteUserPreset(id) {
+  const list = (await dbGetUserPresets()).filter(p => p.id !== id);
+  await dbSaveUserPresets(list);
+  await renderSavedPresets();
+  showToast(t('toast.deleted'));
 }
 
-export function loadUserPreset(id) {
-  const p = getUserPresets().find(p => p.id === id);
+export async function loadUserPreset(id) {
+  const list = await dbGetUserPresets();
+  const p = list.find(p => p.id === id);
   if (!p) return;
 
   Object.assign(state, p.params);
@@ -91,27 +83,28 @@ export function loadUserPreset(id) {
   syncVolumeSlider();
 
   document.getElementById('presetInfoName').textContent = p.name;
-  document.getElementById('presetInfoDesc').textContent = p.savedAt + ' に保存';
+  document.getElementById('presetInfoDesc').textContent = t('info.savedAt', p.savedAt);
 
   closeManager();
-  showToast('「' + p.name + '」を読み込みました');
+  showToast(t('toast.loaded', p.name));
   setTimeout(() => playSE(), 80);
 }
 
-export function exportAllJSON() {
-  const list = getUserPresets();
-  if (!list.length) { showToast('保存済みプリセットがありません'); return; }
+export async function exportAllJSON() {
+  const list = await dbGetUserPresets();
+  if (!list.length) { showToast(t('toast.noPresets')); return; }
 
   const blob = new Blob([JSON.stringify({ version: 1, presets: list }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'game-se-presets.json';
   a.click();
-  showToast(list.length + '件エクスポートしました');
+  showToast(t('toast.exported', list.length));
 }
 
-export function exportSingleJSON(id) {
-  const p = getUserPresets().find(p => p.id === id);
+export async function exportSingleJSON(id) {
+  const list = await dbGetUserPresets();
+  const p = list.find(p => p.id === id);
   if (!p) return;
 
   const blob = new Blob([JSON.stringify({ version: 1, presets: [p] }, null, 2)], { type: 'application/json' });
@@ -126,28 +119,28 @@ export function importJSON(event) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
       const incoming = data.presets || (Array.isArray(data) ? data : [data]);
       if (!incoming.length) throw new Error('empty');
 
-      const list = getUserPresets();
+      const list = await dbGetUserPresets();
       let added = 0;
       incoming.forEach(p => {
         if (!p.name || !p.params) return;
         p.id = Date.now() + Math.random();
-        p.savedAt = p.savedAt || new Date().toLocaleString('ja-JP');
+        p.savedAt = p.savedAt || new Date().toLocaleString(t('locale'));
         const idx = list.findIndex(x => x.name === p.name);
         if (idx >= 0) list[idx] = p; else list.push(p);
         added++;
       });
 
-      saveUserPresets(list);
-      renderSavedPresets();
-      showToast(added + '件インポートしました');
+      await dbSaveUserPresets(list);
+      await renderSavedPresets();
+      showToast(t('toast.imported', added));
     } catch {
-      showToast('JSONの読み込みに失敗しました');
+      showToast(t('toast.importFailed'));
     }
     event.target.value = '';
   };
@@ -156,7 +149,7 @@ export function importJSON(event) {
 }
 
 export function openManager() {
-  renderSavedPresets();
+  renderSavedPresets(); // async, fire and forget
   document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('savePresetName').focus();
 }
@@ -164,4 +157,9 @@ export function openManager() {
 export function closeManager() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
+
+// Re-render preset list when language changes
+document.addEventListener('se:langchange', () => {
+  if (document.getElementById('modalOverlay')?.classList.contains('open')) renderSavedPresets();
+});
 
