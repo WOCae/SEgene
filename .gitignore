@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Optional local tooling (e.g. npx serve)
+node_modules/
+npm-debug.log*
+
+# Personal scratch memo
+覚書.txt

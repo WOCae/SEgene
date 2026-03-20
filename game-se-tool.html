@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game SE Tool</title>
+<link rel="stylesheet" href="game-se-tool.css">
+</head>
+<body>
+<header>
+  <h1>GAME SE TOOL</h1>
+  <span class="badge">Web Audio API</span>
+  <span class="badge">v1.2</span>
+  <button class="badge" onclick="openManager()" style="cursor:pointer;background:rgba(108,99,255,.15);border-color:rgba(108,99,255,.4);color:var(--accent2)">⊞ PRESET MANAGER</button>
+  <button class="badge" onclick="openCompare()" style="cursor:pointer;background:rgba(64,196,170,.12);border-color:rgba(64,196,170,.4);color:var(--teal)">⊟ SE 比較</button>
+  <div class="header-status">
+    <div class="dot"></div>
+    <span>READY</span>
+  </div>
+</header>
+
+<!-- SE Compare Modal -->
+<div class="cmp-overlay" id="cmpOverlay" onclick="if(event.target===this)closeCompare()">
+  <div class="cmp-modal">
+    <div class="cmp-header">
+      <span class="cmp-title">SE COMPARE — 同時比較</span>
+      <button class="modal-close" onclick="closeCompare()">✕</button>
+    </div>
+    <div class="cmp-body" id="cmpBody"></div>
+    <div class="cmp-footer">
+      <button class="cmp-play-all-btn" onclick="cmpPlayAll()">▶▶ 全て再生</button>
+      <button class="cmp-seq-btn" onclick="cmpPlaySequential()">▶ 順番に再生</button>
+      <button class="cmp-add-slot-btn" onclick="cmpAddSlot()">＋ スロット追加</button>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text3)">右クリックで削除 / スロットをクリックして現在の設定をキャプチャ</span>
+    </div>
+  </div>
+</div>
+
+<!-- Preset Manager Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeManager()">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">PRESET MANAGER</span>
+      <button class="modal-close" onclick="closeManager()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-divider">現在の設定を保存</div>
+      <div class="save-form">
+        <input type="text" id="savePresetName" placeholder="プリセット名を入力…" maxlength="40">
+        <button class="btn-secondary" style="width:auto;padding:9px 14px;font-size:11px" onclick="saveCurrentPreset()">保存</button>
+      </div>
+      <div class="section-divider">保存済みプリセット</div>
+      <div id="savedPresetList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" style="font-size:11px" onclick="exportAllJSON()">⬇ 全てエクスポート (.json)</button>
+      <label class="btn-secondary" style="font-size:11px;cursor:pointer;width:auto;padding:10px 14px;display:flex;align-items:center;gap:6px">
+        ⬆ インポート (.json)
+        <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<div class="layout" id="appLayout" data-mobile-tab="presets">
+  <!-- Presets Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">PRESETS</div>
+    <div class="cat-tabs">
+      <button class="cat-tab active-8bit" onclick="setCategory('8bit',this)">8BIT</button>
+      <button class="cat-tab" onclick="setCategory('real',this)">REAL</button>
+      <button class="cat-tab" onclick="setCategory('ui',this)">UI</button>
+      <button class="cat-tab" onclick="setCategory('env',this)">ENV</button>
+    </div>
+    <div class="preset-list" id="presetList"></div>
+  </div>
+
+  <!-- Center Editor -->
+  <div class="center">
+    <div class="visualizer-wrap">
+      <div class="visualizer-label">WAVEFORM</div>
+      <canvas id="canvas"></canvas>
+    </div>
+    <div class="editor-area">
+      <div class="section-title">OSCILLATOR</div>
+      <div class="wave-selector" id="waveSelector">
+        <button class="wave-btn active" onclick="setWave('square',this)">SQUARE</button>
+        <button class="wave-btn" onclick="setWave('sine',this)">SINE</button>
+        <button class="wave-btn" onclick="setWave('sawtooth',this)">SAW</button>
+        <button class="wave-btn" onclick="setWave('triangle',this)">TRI</button>
+        <button class="wave-btn" onclick="setWave('noise',this)">NOISE</button>
+      </div>
+
+      <div class="section-title">ENVELOPE (ADSR)</div>
+      <div class="params-grid">
+        <div class="param">
+          <div class="param-label">ATTACK <span class="param-val" id="vAttack">10ms</span></div>
+          <input type="range" id="attack" min="1" max="500" value="10" oninput="updateParam('attack',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">DECAY <span class="param-val" id="vDecay">100ms</span></div>
+          <input type="range" id="decay" min="1" max="1000" value="100" oninput="updateParam('decay',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">SUSTAIN <span class="param-val" id="vSustain">0.3</span></div>
+          <input type="range" id="sustain" min="0" max="100" value="30" oninput="updateParam('sustain',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">RELEASE <span class="param-val" id="vRelease">200ms</span></div>
+          <input type="range" id="release" min="1" max="2000" value="200" oninput="updateParam('release',this.value)">
+        </div>
+      </div>
+
+      <div class="section-title">PITCH</div>
+      <div class="params-grid">
+        <div class="param">
+          <div class="param-label">FREQUENCY <span class="param-val" id="vFreq">440Hz</span></div>
+          <input type="range" id="frequency" min="20" max="2000" value="440" oninput="updateParam('frequency',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">PITCH SWEEP <span class="param-val" id="vSweep">0Hz</span></div>
+          <input type="range" id="sweep" min="-800" max="800" value="0" oninput="updateParam('sweep',this.value)">
+        </div>
+      </div>
+
+      <div class="section-title">FILTER</div>
+      <div class="params-grid">
+        <div class="param">
+          <div class="param-label">CUTOFF <span class="param-val" id="vCutoff">8000Hz</span></div>
+          <input type="range" id="cutoff" min="80" max="20000" value="8000" oninput="updateParam('cutoff',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">RESONANCE <span class="param-val" id="vRes">1.0</span></div>
+          <input type="range" id="resonance" min="0.1" max="20" step="0.1" value="1" oninput="updateParam('resonance',this.value)">
+        </div>
+      </div>
+
+      <div class="section-title">EFFECTS</div>
+      <div class="params-grid">
+        <div class="param">
+          <div class="param-label">DISTORTION <span class="param-val" id="vDist">0</span></div>
+          <input type="range" id="distortion" min="0" max="400" value="0" oninput="updateParam('distortion',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">REVERB <span class="param-val" id="vReverb">0%</span></div>
+          <input type="range" id="reverb" min="0" max="100" value="0" oninput="updateParam('reverb',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">VIBRATO <span class="param-val" id="vVibrato">0Hz</span></div>
+          <input type="range" id="vibrato" min="0" max="20" step="0.5" value="0" oninput="updateParam('vibrato',this.value)">
+        </div>
+        <div class="param">
+          <div class="param-label">DURATION <span class="param-val" id="vDuration">0.5s</span></div>
+          <input type="range" id="duration" min="50" max="5000" value="500" oninput="updateParam('duration',this.value)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Arpeggiator Panel -->
+    <div class="arp-panel">
+      <div class="arp-header">
+        <span class="arp-title">ARPEGGIATOR</span>
+        <span class="arp-status" id="arpStatus">STOPPED</span>
+        <div class="arp-controls">
+          <div class="arp-bpm-wrap">
+            <span class="arp-bpm-label">BPM</span>
+            <input type="range" id="arpBpm" min="60" max="300" value="140" style="width:80px" oninput="arpBpmChange(this.value)">
+            <span class="arp-bpm-val" id="vArpBpm">140</span>
+          </div>
+          <select class="arp-select" id="arpDiv" onchange="arpDivChange()">
+            <option value="4">♩ 4分</option>
+            <option value="8" selected>♪ 8分</option>
+            <option value="16">♬ 16分</option>
+            <option value="32">32分</option>
+          </select>
+          <select class="arp-select" id="arpSteps" onchange="arpStepsChange()">
+            <option value="8">8ステップ</option>
+            <option value="16" selected>16ステップ</option>
+          </select>
+          <button class="arp-btn start" id="arpStartBtn" onclick="arpStart()">▶ START</button>
+          <button class="arp-btn stop" id="arpStopBtn" onclick="arpStop()">■ STOP</button>
+        </div>
+      </div>
+
+      <!-- Step grid: 4 pitch rows × 16 steps -->
+      <div class="arp-grid" id="arpGrid"></div>
+
+      <div class="arp-meta">
+        <span class="arp-bpm-label">スケール</span>
+        <select class="arp-select" id="arpScale" onchange="arpRebuildNotes()">
+          <option value="major">メジャー</option>
+          <option value="minor">マイナー</option>
+          <option value="penta">ペンタトニック</option>
+          <option value="blues">ブルース</option>
+          <option value="chromatic">クロマチック</option>
+          <option value="free">フリー（半音）</option>
+        </select>
+        <span class="arp-bpm-label">ルート</span>
+        <select class="arp-select" id="arpRoot">
+          <option value="0">C</option><option value="2">D</option>
+          <option value="4">E</option><option value="5">F</option>
+          <option value="7">G</option><option value="9">A</option>
+          <option value="11">B</option>
+        </select>
+        <span class="arp-bpm-label">オクターブ</span>
+        <select class="arp-select" id="arpOct">
+          <option value="3">3</option><option value="4" selected>4</option>
+          <option value="5">5</option><option value="6">6</option>
+        </select>
+        <span class="arp-bpm-label" style="margin-left:8px">パターン</span>
+        <div class="arp-pattern-btns">
+          <button class="arp-pattern-btn" onclick="arpPattern('up')">↑ Up</button>
+          <button class="arp-pattern-btn" onclick="arpPattern('down')">↓ Down</button>
+          <button class="arp-pattern-btn" onclick="arpPattern('updown')">↕ UD</button>
+          <button class="arp-pattern-btn" onclick="arpPattern('rand')">⚄ Rand</button>
+          <button class="arp-pattern-btn" onclick="arpPattern('clear')">✕ Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pitch Sequencer Panel -->
+    <div class="pseq-panel" id="pseqPanel" style="display:none">
+      <div class="pseq-header">
+        <span class="pseq-title">PITCH SEQUENCER</span>
+        <span class="pseq-status" id="pseqStatus">STOPPED</span>
+        <div class="pseq-controls">
+          <span class="pseq-meta-label">BPM</span>
+          <input type="range" id="pseqBpm" min="40" max="280" value="120" style="width:70px" oninput="pseqBpmChange(this.value)">
+          <span class="pseq-bpm-val" id="vPseqBpm">120</span>
+          <select class="pseq-select" id="pseqDiv" onchange="pseqDivChange()">
+            <option value="4">♩ 4分</option>
+            <option value="8" selected>♪ 8分</option>
+            <option value="16">♬ 16分</option>
+          </select>
+          <select class="pseq-select" id="pseqLen" onchange="pseqLenChange()">
+            <option value="8">8steps</option>
+            <option value="16" selected>16steps</option>
+          </select>
+          <button class="pseq-btn start" onclick="pseqStart()">▶ START</button>
+          <button class="pseq-btn stop" onclick="pseqStop()">■ STOP</button>
+        </div>
+      </div>
+      <div class="pseq-grid" id="pseqGrid"></div>
+      <div class="pseq-meta">
+        <span class="pseq-meta-label">スケール</span>
+        <select class="pseq-select" id="pseqScale" onchange="pseqRebuild()">
+          <option value="major">メジャー</option>
+          <option value="minor">マイナー</option>
+          <option value="penta">ペンタトニック</option>
+          <option value="blues">ブルース</option>
+          <option value="chromatic">クロマチック</option>
+        </select>
+        <span class="pseq-meta-label">ルート</span>
+        <select class="pseq-select" id="pseqRoot">
+          <option value="0">C</option><option value="2">D</option>
+          <option value="4">E</option><option value="5">F</option>
+          <option value="7">G</option><option value="9">A</option>
+          <option value="11">B</option>
+        </select>
+        <span class="pseq-meta-label">オクターブ</span>
+        <select class="pseq-select" id="pseqOct">
+          <option value="3">3</option><option value="4" selected>4</option>
+          <option value="5">5</option>
+        </select>
+        <span class="pseq-meta-label">レンジ</span>
+        <select class="pseq-select" id="pseqRange">
+          <option value="1">1oct</option>
+          <option value="2" selected>2oct</option>
+          <option value="3">3oct</option>
+        </select>
+        <span class="pseq-meta-label" style="margin-left:6px">クイック</span>
+        <div class="pseq-quick-btns">
+          <button class="pseq-quick-btn" onclick="pseqQuick('scale-up')">↑ スケール</button>
+          <button class="pseq-quick-btn" onclick="pseqQuick('scale-down')">↓ スケール</button>
+          <button class="pseq-quick-btn" onclick="pseqQuick('rand')">⚄ ランダム</button>
+          <button class="pseq-quick-btn" onclick="pseqQuick('flat')">― フラット</button>
+          <button class="pseq-quick-btn" onclick="pseqToggleMute()">🔇 ミュート</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div>
+      <div class="panel-section-title">PLAYBACK</div>
+      <button class="btn-play" onclick="playSE()" id="playBtn">
+        ▶ PLAY
+      </button>
+      <div style="margin-top:8px" class="volume-wrap">
+        <span class="vol-label">VOL</span>
+        <input type="range" id="volume" min="0" max="100" value="80" oninput="updateVolume(this.value)">
+        <span class="param-val" id="vVol">80%</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-section-title">EXPORT</div>
+      <button class="btn-export" onclick="exportWAV()">⬇ EXPORT WAV</button>
+    </div>
+
+    <div>
+      <div class="panel-section-title">RANDOMIZE</div>
+      <button class="random-btn" onclick="randomize()">⚄ RANDOMIZE PARAMS</button>
+    </div>
+
+    <div class="tboard-section">
+      <div class="panel-section-title" style="margin-bottom:0">TEMP BOARD</div>
+      <div class="tboard-header" style="margin-top:8px">
+        <span class="tboard-title"></span>
+        <button class="tboard-add-btn" onclick="tbAdd()">＋ 現在を保存</button>
+        <button class="tboard-clear-btn" onclick="tbClearAll()">全消去</button>
+      </div>
+      <div class="tboard-list" id="tbList">
+        <div class="tboard-empty" onclick="tbAdd()">クリックして現在の設定を保存</div>
+      </div>
+    </div>
+      <select id="filterType" onchange="updateFilter()">
+        <option value="lowpass">Lowpass</option>
+        <option value="highpass">Highpass</option>
+        <option value="bandpass">Bandpass</option>
+        <option value="notch">Notch</option>
+      </select>
+    </div>
+
+    <div>
+      <div class="panel-section-title">OPTIONS</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Pitch sequencer</span>
+        <label class="toggle">
+          <input type="checkbox" id="pseqVisible" onchange="togglePseq(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Loop mode</span>
+        <label class="toggle">
+          <input type="checkbox" id="loopMode">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Stereo ping-pong</span>
+        <label class="toggle">
+          <input type="checkbox" id="pingPong">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>現在のプリセット</strong><br>
+      <span id="presetInfoName" style="font-size:13px;color:var(--text);margin-top:4px;display:block">—</span>
+      <span id="presetInfoDesc" style="font-size:11px;color:var(--text3);margin-top:2px;display:block">プリセットを選択してください</span>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3)">
+        <kbd class="kbd">SPACE</kbd> 再生 &nbsp; <kbd class="kbd">T</kbd> 一時保存 &nbsp; <kbd class="kbd">C</kbd> 比較 &nbsp; <kbd class="kbd">A</kbd> アルペジオ &nbsp; <kbd class="kbd">P</kbd> ピッチSEQ &nbsp; <kbd class="kbd">R</kbd> ランダム &nbsp; <kbd class="kbd">S</kbd> 保存
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:var(--text3)">Temp Board: ドラッグで並び替え / 名前クリックで編集</div>
+    </div>
+  </div>
+</div>
+
+<nav class="mobile-tabbar" id="mobileTabbar" aria-label="画面の切替" aria-hidden="true">
+  <button type="button" class="mobile-tab is-active" data-tab="presets" role="tab" aria-selected="true">プリセット</button>
+  <button type="button" class="mobile-tab" data-tab="edit" role="tab" aria-selected="false">編集</button>
+  <button type="button" class="mobile-tab" data-tab="tools" role="tab" aria-selected="false">ツール</button>
+</nav>
+
+<script type="module" src="game-se-tool.js"></script>
+</body>
+</html>
