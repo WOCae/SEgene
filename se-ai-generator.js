@@ -8,6 +8,7 @@ import { showToast } from './se-toast.js';
 // ── サーバープロキシ状態 ───────────────────────────────────────────────────────
 // null=未確認 / true=利用可能 / false=利用不可
 let _proxyAvailable = null;
+let _proxyChecking  = false; // 起動待ちポーリング中フラグ
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const KEY_PROVIDER     = 'se-ai-provider';
@@ -387,20 +388,43 @@ function _filterModels(provider, ids) {
   });
 }
 
-/** サーバープロキシの有無を確認して _proxyAvailable を更新 */
+/** サーバープロキシの有無を確認して _proxyAvailable を更新
+ *  コールドスタート対応: 最大12回（約60秒）リトライ */
 async function _checkProxy() {
-  if (_proxyAvailable !== null) return; // 確認済み
-  try {
-    const res = await fetch('/api/proxy-available');
-    _proxyAvailable = res.ok && (await res.json()).available === true;
-  } catch {
-    _proxyAvailable = false;
+  if (_proxyAvailable === true) return; // 確認済み（利用可能）
+  if (_proxyChecking) return;           // 既にポーリング中
+  _proxyChecking = true;
+
+  const MAX_RETRY = 12;
+  for (let i = 0; i <= MAX_RETRY; i++) {
+    try {
+      const res = await fetch('/api/proxy-available',
+        { signal: AbortSignal.timeout(8000) });
+      if (res.ok && (await res.json()).available === true) {
+        _proxyAvailable = true;
+        break;
+      }
+    } catch { /* タイムアウト or 接続拒否 → 起動中 */ }
+
+    if (i < MAX_RETRY) {
+      // モーダルが開いている間だけステータスを表示
+      if (document.getElementById('aiGenOverlay')?.classList.contains('open')) {
+        _setStatus('サーバー起動中… しばらくお待ちください');
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    } else {
+      _proxyAvailable = false; // タイムアウト → 利用不可と判定
+    }
   }
-  // Groq が選択中なら key プレースホルダーを更新
+
+  _proxyChecking = false;
+
+  // Groq 選択中なら UI を更新
   const provider = document.getElementById('aiGenProvider')?.value;
   if (provider === 'groq') {
     const savedKey = localStorage.getItem(apiKey(provider)) || '';
     _updateKeyPlaceholder(provider, savedKey);
+    if (_proxyAvailable) _setStatus('');
   }
 }
 
@@ -418,19 +442,29 @@ function _updateKeyPlaceholder(provider, currentValue) {
 
 /** サーバープロキシ経由で Groq を呼び出す */
 async function _callProxy(model, description) {
-  const res = await fetch('/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user',   content: description },
-      ],
-      temperature: 0.7,
-      max_tokens: 4096,
-    }),
-  });
+  let res;
+  try {
+    res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user',   content: description },
+        ],
+        temperature: 0.7,
+        max_tokens: 4096,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+  } catch {
+    // 接続できない = コールドスタート中
+    throw new Error('サーバー起動中です。30秒ほど待ってから再試行してください');
+  }
+  if (res.status === 503) {
+    throw new Error('サーバー起動中です。30秒ほど待ってから再試行してください');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.detail || err?.error?.message || `API error ${res.status}`);
