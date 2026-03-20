@@ -105,48 +105,64 @@ Object.assign(window, {
   tbDragEnd,
   tbDragOver,
   tbDrop,
-  tbRenameCard
+  tbRenameCard,
 });
 
-// Mobile layout tabs (narrow viewport)
-// 800x600 でも標準（3カラム）表示に寄せるため、閾値を下げる
+// Keep MQ reference for panel resizer (disables drag on mobile)
 const MOBILE_TAB_MQ = window.matchMedia('(max-width: 768px)');
-const appLayout = document.getElementById('appLayout');
-const mobileTabbar = document.getElementById('mobileTabbar');
 
-function setMobileTab(tab) {
-  if (!appLayout || !mobileTabbar) return;
-  appLayout.dataset.mobileTab = tab;
-  mobileTabbar.querySelectorAll('.mobile-tab').forEach((btn) => {
-    const on = btn.dataset.tab === tab;
-    btn.classList.toggle('is-active', on);
-    btn.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-}
+// Mobile bottom sheets
+function initMobileSheets() {
+  const sidebar  = document.querySelector('.sidebar');
+  const panel    = document.querySelector('.panel');
+  const backdrop = document.getElementById('mobileSheetBackdrop');
+  const triggers = {
+    preset: document.getElementById('triggerPreset'),
+    tools:  document.getElementById('triggerTools'),
+  };
+  if (!backdrop || !sidebar || !panel) return;
 
-function syncMobileTabUI() {
-  if (!appLayout || !mobileTabbar) return;
-  if (MOBILE_TAB_MQ.matches) {
-    if (!appLayout.dataset.mobileTab) appLayout.dataset.mobileTab = 'presets';
-    setMobileTab(appLayout.dataset.mobileTab);
-    mobileTabbar.setAttribute('aria-hidden', 'false');
-  } else {
-    mobileTabbar.querySelectorAll('.mobile-tab').forEach((btn) => {
-      btn.classList.remove('is-active');
-      btn.setAttribute('aria-selected', 'false');
-    });
-    mobileTabbar.setAttribute('aria-hidden', 'true');
+  const sheets = { preset: sidebar, tools: panel };
+  let active = null;
+
+  function openSheet(which) {
+    if (active && active !== which) {
+      sheets[active].classList.remove('sheet-open');
+      triggers[active]?.classList.remove('is-active');
+    }
+    active = which;
+    sheets[which].classList.add('sheet-open');
+    triggers[which]?.classList.add('is-active');
+    backdrop.classList.add('is-visible');
+  }
+
+  function closeSheet() {
+    if (!active) return;
+    sheets[active].classList.remove('sheet-open');
+    triggers[active]?.classList.remove('is-active');
+    active = null;
+    backdrop.classList.remove('is-visible');
+  }
+
+  window.toggleMobileSheet = (which) => {
+    active === which ? closeSheet() : openSheet(which);
+  };
+
+  backdrop.addEventListener('click', closeSheet);
+
+  // Swipe down to close
+  for (const sheet of Object.values(sheets)) {
+    let startY = 0;
+    sheet.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    sheet.addEventListener('touchend', (e) => {
+      if (e.changedTouches[0].clientY - startY > 60) closeSheet();
+    }, { passive: true });
   }
 }
 
-mobileTabbar?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.mobile-tab');
-  if (!btn?.dataset.tab) return;
-  setMobileTab(btn.dataset.tab);
-});
-
-MOBILE_TAB_MQ.addEventListener('change', syncMobileTabUI);
-syncMobileTabUI();
+initMobileSheets();
 
 // Panel resizers (drag horizontally)
 function initPanelResizers() {

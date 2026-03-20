@@ -385,11 +385,14 @@
   </div>
 </div>
 
-<nav class="mobile-tabbar" id="mobileTabbar" aria-label="画面の切替" aria-hidden="true">
-  <button type="button" class="mobile-tab is-active" data-tab="presets" role="tab" aria-selected="true">プリセット</button>
-  <button type="button" class="mobile-tab" data-tab="edit" role="tab" aria-selected="false">編集</button>
-  <button type="button" class="mobile-tab" data-tab="tools" role="tab" aria-selected="false">ツール</button>
-</nav>
+<div class="mobile-footer" id="mobileFooter">
+  <button class="mobile-play-btn" onclick="playSE()" id="mobilePlayBtn">▶ PLAY</button>
+  <div class="mobile-sheet-handles">
+    <button class="mobile-sheet-trigger" id="triggerPreset" onclick="toggleMobileSheet('preset')">≡ プリセット</button>
+    <button class="mobile-sheet-trigger" id="triggerTools" onclick="toggleMobileSheet('tools')">⚙ 出力・設定</button>
+  </div>
+</div>
+<div class="mobile-sheet-backdrop" id="mobileSheetBackdrop"></div>
 
 <script type="module" src="game-se-tool-entry.js"></script>
 </body>
