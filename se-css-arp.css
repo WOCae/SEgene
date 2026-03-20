@@ -1,0 +1,143 @@
+﻿  /* Arpeggiator */
+  .arp-panel {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    padding: 12px 20px 14px;
+  }
+  .arp-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .arp-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .arp-status {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--text3);
+    transition: all .2s;
+  }
+  .arp-status.playing {
+    color: var(--green);
+    border-color: rgba(57,217,138,.4);
+    background: rgba(57,217,138,.08);
+  }
+  .arp-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+  .arp-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text2);
+    transition: all .15s;
+    letter-spacing: 1px;
+  }
+  .arp-btn:hover { border-color: var(--border2); color: var(--text); }
+  .arp-btn.start {
+    background: rgba(57,217,138,.12);
+    border-color: rgba(57,217,138,.35);
+    color: var(--green);
+  }
+  .arp-btn.start:hover { background: rgba(57,217,138,.22); }
+  .arp-btn.stop {
+    background: rgba(255,107,107,.1);
+    border-color: rgba(255,107,107,.3);
+    color: var(--coral);
+  }
+  .arp-btn.stop:hover { background: rgba(255,107,107,.2); }
+  .arp-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 8px;
+    align-items: center;
+  }
+  .arp-row-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    text-align: right;
+    white-space: nowrap;
+    width: 52px;
+  }
+  .arp-steps {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 3px;
+  }
+  .arp-step {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all .1s;
+    position: relative;
+    min-width: 0;
+  }
+  .arp-step.note-off { background: var(--bg3); }
+  .arp-step.note-on  { background: rgba(108,99,255,.35); border-color: var(--accent); }
+  .arp-step.current  { box-shadow: 0 0 0 2px var(--accent2); }
+  .arp-step:hover { border-color: var(--border2); }
+  /* Pitch rows get a color tint per octave */
+  .arp-step[data-row="0"].note-on { background: rgba(57,217,138,.3); border-color: var(--green); }
+  .arp-step[data-row="1"].note-on { background: rgba(108,99,255,.35); border-color: var(--accent); }
+  .arp-step[data-row="2"].note-on { background: rgba(255,183,77,.3); border-color: var(--amber); }
+  .arp-step[data-row="3"].note-on { background: rgba(255,107,107,.3); border-color: var(--coral); }
+  .arp-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .arp-bpm-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .arp-select {
+    padding: 5px 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+  }
+  .arp-select:focus { border-color: var(--accent); }
+  .arp-bpm-label { font-family: var(--mono); font-size: 10px; color: var(--text3); white-space: nowrap; }
+  .arp-bpm-val { font-family: var(--mono); font-size: 11px; color: var(--accent2); min-width: 36px; }
+  .arp-pattern-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+  .arp-pattern-btn {
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg4);
+    color: var(--text3);
+    transition: all .15s;
+  }
+  .arp-pattern-btn:hover { color: var(--text2); border-color: var(--border2); }
+

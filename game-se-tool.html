@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Game SE Tool</title>
-<link rel="stylesheet" href="game-se-tool.css">
+<link rel="stylesheet" href="se-css-core.css">
+<link rel="stylesheet" href="se-css-arp.css">
+<link rel="stylesheet" href="se-css-pseq-compare.css">
+<link rel="stylesheet" href="se-css-temp-mobile.css">
 </head>
 <body>
 <header>
@@ -299,6 +302,7 @@
     <div>
       <div class="panel-section-title">EXPORT</div>
       <button class="btn-export" onclick="exportWAV()">⬇ EXPORT WAV</button>
+      <button class="btn-export" onclick="exportOGG()" style="margin-top:8px;">⬇ EXPORT OGG</button>
     </div>
 
     <div>
@@ -368,6 +372,6 @@
   <button type="button" class="mobile-tab" data-tab="tools" role="tab" aria-selected="false">ツール</button>
 </nav>
 
-<script type="module" src="game-se-tool.js"></script>
+<script type="module" src="game-se-tool-entry.js"></script>
 </body>
 </html>

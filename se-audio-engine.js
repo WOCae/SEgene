@@ -1,0 +1,312 @@
+import { state, app } from './se-state.js';
+import { showToast } from './se-toast.js';
+
+let audioCtx = null;
+let analyser = null;
+let masterGain = null;
+let rafId = null;
+
+// Export OGG のときに「ARP/PSEQ を止める」責務をここから分離する
+let stopArpIfPlaying = () => {};
+let stopPseqIfPlaying = () => {};
+
+export function registerExportStopHandlers({ stopArpIfPlaying: fn1, stopPseqIfPlaying: fn2 } = {}) {
+  if (typeof fn1 === 'function') stopArpIfPlaying = fn1;
+  if (typeof fn2 === 'function') stopPseqIfPlaying = fn2;
+}
+
+export function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = state.volume;
+  masterGain.connect(analyser);
+  analyser.connect(audioCtx.destination);
+  drawWaveform();
+}
+
+export function drawWaveform() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  const buf = new Uint8Array(analyser ? analyser.fftSize : 2048);
+
+  function draw() {
+    rafId = requestAnimationFrame(draw);
+    ctx.clearRect(0, 0, W, H);
+    if (analyser) analyser.getByteTimeDomainData(buf);
+    ctx.strokeStyle = '#6c63ff';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#6c63ff';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    const step = W / buf.length;
+    for (let i = 0; i < buf.length; i++) {
+      const v = analyser ? (buf[i] / 128) - 1 : 0;
+      const y = (H / 2) + v * (H / 2 - 10);
+      i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * step, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // center line
+    ctx.strokeStyle = 'rgba(108,99,255,0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2);
+    ctx.stroke();
+  }
+  draw();
+}
+
+function makeNoise(ctx, duration) {
+  const bufSize = ctx.sampleRate * duration;
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  return src;
+}
+
+function makeConvolver(ctx, reverbAmount) {
+  const conv = ctx.createConvolver();
+  const rate = ctx.sampleRate;
+  const len = rate * 2;
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    }
+  }
+  conv.buffer = buf;
+  const wet = ctx.createGain();
+  wet.gain.value = reverbAmount / 100;
+  conv.connect(wet);
+  return { conv, wet };
+}
+
+function playSEOnCtx(ctx, dest, params) {
+  const p = params || state;
+  const now = Math.max(0, ctx.currentTime);
+  const dur = Math.max(0.01, p.duration / 1000);
+  const atkT = Math.max(0.001, p.attack / 1000);
+  const decT = Math.max(0.001, p.decay / 1000);
+  const relT = Math.max(0.001, p.release / 1000);
+  // sustain phase must start at or after attack+decay, and before dur
+  const susStart = Math.min(now + atkT + decT, now + dur - 0.001);
+  const susEnd = Math.max(susStart + 0.001, now + dur - relT);
+  const endT = Math.max(susEnd + 0.001, now + dur + relT);
+
+  // Source
+  let src;
+  if (p.wave === 'noise') {
+    src = makeNoise(ctx, dur + 0.5);
+  } else {
+    src = ctx.createOscillator();
+    src.type = p.wave;
+    src.frequency.setValueAtTime(p.frequency, now);
+    if (p.sweep !== 0) {
+      src.frequency.linearRampToValueAtTime(p.frequency + p.sweep, now + dur * 0.8);
+    }
+  }
+
+  // Vibrato
+  let vibratoGain;
+  if (p.vibrato > 0) {
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = p.vibrato;
+    vibratoGain = ctx.createGain();
+    vibratoGain.gain.value = 15;
+    lfo.connect(vibratoGain);
+    if (p.wave !== 'noise') vibratoGain.connect(src.frequency);
+    lfo.start(now);
+    lfo.stop(endT);
+  }
+
+  // Filter
+  const filter = ctx.createBiquadFilter();
+  filter.type = p.filterType || 'lowpass';
+  filter.frequency.value = p.cutoff;
+  filter.Q.value = p.resonance;
+
+  // Distortion
+  const dist = ctx.createWaveShaper();
+  if (p.distortion > 0) {
+    const n = 256, curve = new Float32Array(n);
+    const k = p.distortion;
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1;
+      curve[i] = (Math.PI + k) * x / (Math.PI + k * Math.abs(x));
+    }
+    dist.curve = curve;
+    dist.oversample = '4x';
+  }
+
+  // Gain (ADSR)
+  const envGain = ctx.createGain();
+  envGain.gain.setValueAtTime(0, now);
+  envGain.gain.linearRampToValueAtTime(1, now + atkT);
+  envGain.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, p.sustain)), susStart);
+  envGain.gain.setValueAtTime(Math.max(0, Math.min(1, p.sustain)), susEnd);
+  envGain.gain.linearRampToValueAtTime(0, endT);
+
+  // Connect chain
+  src.connect(filter);
+  if (p.distortion > 0) { filter.connect(dist); dist.connect(envGain); }
+  else { filter.connect(envGain); }
+
+  if (p.reverb > 0) {
+    const { conv, wet } = makeConvolver(ctx, p.reverb);
+    const dry = ctx.createGain();
+    dry.gain.value = 1 - p.reverb / 200;
+    envGain.connect(dry);
+    envGain.connect(conv);
+    dry.connect(dest);
+    wet.connect(dest);
+  } else {
+    envGain.connect(dest);
+  }
+
+  src.start(now);
+  src.stop(endT + 0.05);
+  return { src, dur: endT - now + 0.05 };
+}
+
+export function playSE() {
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  playSEOnCtx(audioCtx, masterGain, state);
+}
+
+export async function exportWAV() {
+  initAudio();
+  const dur = state.duration / 1000 + state.release / 1000 + 0.3;
+  const offCtx = new OfflineAudioContext(2, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+  playSEOnCtx(offCtx, offCtx.destination, state);
+  const rendered = await offCtx.startRendering();
+  const wav = encodeWAV(rendered);
+  const blob = new Blob([wav], { type: 'audio/wav' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (app.activePreset || 'se') + '.wav';
+  a.click();
+}
+
+export async function exportOGG() {
+  // NOTE:
+  // Browsers can encode OGG (usually Opus) via MediaRecorder.
+  // We render by actually playing into an in-memory MediaStreamDestination and record it.
+  initAudio();
+  const AudioRec = window.MediaRecorder;
+  if (!AudioRec) {
+    showToast('OGG出力: MediaRecorder が利用できません');
+    return;
+  }
+
+  const candidates = [
+    'audio/ogg;codecs=opus',
+    'audio/ogg; codecs=opus',
+    'audio/ogg'
+  ];
+  let mimeType = null;
+  for (const t of candidates) {
+    try {
+      if (AudioRec.isTypeSupported && AudioRec.isTypeSupported(t)) { mimeType = t; break; }
+    } catch {}
+  }
+  if (!mimeType) {
+    showToast('OGG出力: 対応する mimeType が見つかりません');
+    return;
+  }
+
+  // optional: stop current ARP/PSEQ playback to avoid mixing.
+  try { stopArpIfPlaying(); } catch {}
+  try { stopPseqIfPlaying(); } catch {}
+
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+  const recorderDest = audioCtx.createMediaStreamDestination();
+  const exportGain = audioCtx.createGain();
+  // Keep same semantics as exportWAV(): it doesn't apply `state.volume`
+  exportGain.gain.value = 1;
+  exportGain.connect(recorderDest);
+
+  let recorder;
+  const chunks = [];
+  try {
+    recorder = new AudioRec(recorderDest.stream, { mimeType });
+  } catch (e) {
+    showToast('OGG出力: MediaRecorder初期化に失敗しました');
+    return;
+  }
+
+  recorder.ondataavailable = (ev) => {
+    if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+  };
+
+  const done = new Promise((resolve) => {
+    recorder.onstop = () => resolve();
+  });
+
+  // Start recording before playback starts.
+  recorder.start();
+
+  const { dur } = playSEOnCtx(audioCtx, exportGain, state);
+  const stopMs = Math.ceil((dur * 1000) + 250); // small safety tail
+  window.setTimeout(() => {
+    try { recorder.stop(); } catch {}
+  }, stopMs);
+
+  await done;
+  if (!chunks.length) {
+    showToast('OGG出力: 録音データが空でした');
+    return;
+  }
+
+  const blob = new Blob(chunks, { type: mimeType });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (app.activePreset || 'se') + '.ogg';
+  a.click();
+}
+
+function encodeWAV(buffer) {
+  const numCh = buffer.numberOfChannels;
+  const sr = buffer.sampleRate;
+  const len = buffer.length;
+  const ab = new ArrayBuffer(44 + len * numCh * 2);
+  const view = new DataView(ab);
+  const wr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  wr(0, 'RIFF'); view.setUint32(4, 36 + len * numCh * 2, true);
+  wr(8, 'WAVE'); wr(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numCh, true); view.setUint32(24, sr, true);
+  view.setUint32(28, sr * numCh * 2, true); view.setUint16(32, numCh * 2, true);
+  view.setUint16(34, 16, true); wr(36, 'data');
+  view.setUint32(40, len * numCh * 2, true);
+  let off = 44;
+  const ch = [];
+  for (let c = 0; c < numCh; c++) ch.push(buffer.getChannelData(c));
+  for (let i = 0; i < len; i++) {
+    for (let c = 0; c < numCh; c++) {
+      const s = Math.max(-1, Math.min(1, ch[c][i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      off += 2;
+    }
+  }
+  return ab;
+}
+
+// 他モジュールが必要な音声コンテキスト
+export { audioCtx, analyser, masterGain };
+
+// PSEQ / ARP / Compare / TempBoard が呼ぶ「単発SE再生」
+export { playSEOnCtx };
+
