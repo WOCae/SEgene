@@ -1,3 +1,13 @@
+---
+title: SEgene - Game SE Tool
+emoji: 🎵
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Game SE Tool (SEgene)
 
 ブラウザ上でゲーム向け SE を合成・試聴・書き出しする静的ツールです。
