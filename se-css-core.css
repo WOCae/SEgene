@@ -1,4 +1,4 @@
-﻿  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
   :root {
     --bg: #0d0f14;
@@ -72,16 +72,44 @@
 
   /* Layout */
   .layout {
+    --left-panel-w: 260px;
+    --right-panel-w: 280px;
+    --panel-resizer-w: 8px;
     display: grid;
-    grid-template-columns: 260px 1fr 280px;
+    grid-template-columns: var(--left-panel-w) var(--panel-resizer-w) 1fr var(--panel-resizer-w) var(--right-panel-w);
     height: calc(100vh - 53px);
     overflow: hidden;
+  }
+
+  /* Panels resizer (drag horizontally) */
+  .panel-resizer {
+    background: var(--bg2);
+    position: relative;
+    cursor: col-resize;
+    touch-action: none; /* prevent touch scrolling during drag */
+  }
+  .panel-resizer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-0.5px);
+    width: 1px;
+    background: var(--border);
+  }
+  .panel-resizer:hover::before {
+    background: var(--border2);
+  }
+  .layout.is-resizing {
+    user-select: none;
+    cursor: col-resize;
   }
 
   /* Sidebar left: presets */
   .sidebar {
     background: var(--bg2);
-    border-right: 1px solid var(--border);
+    border-right: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -296,7 +324,7 @@
   /* Sidebar right: actions */
   .panel {
     background: var(--bg2);
-    border-left: 1px solid var(--border);
+    border-left: none;
     display: flex;
     flex-direction: column;
     padding: 16px;

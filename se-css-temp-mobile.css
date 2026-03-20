@@ -194,6 +194,10 @@
       overflow: hidden;
     }
 
+    .panel-resizer {
+      display: none;
+    }
+
     .layout[data-mobile-tab="presets"] .sidebar {
       display: flex;
     }
