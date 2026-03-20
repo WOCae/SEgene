@@ -204,6 +204,53 @@
       min-width: 0;
     }
 
+    /* ── Header compact ── */
+    header {
+      padding: 8px 10px;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+    /* "Web Audio API" badge は省スペースのため非表示 */
+    header > .badge:first-of-type {
+      display: none;
+    }
+    .badge {
+      font-size: 9px;
+      padding: 2px 6px;
+    }
+    .header-status { font-size: 11px; }
+
+    /* ── Waveform compact ── */
+    .visualizer-wrap { padding: 8px 12px 0; }
+    canvas { height: 60px; }
+    .visualizer-label { font-size: 9px; margin-bottom: 4px; }
+
+    /* ── Editor area compact ── */
+    .editor-area { padding: 8px 12px; }
+    .section-title { margin-top: 10px; margin-bottom: 6px; }
+
+    /* ── OSCILLATOR buttons ── */
+    .wave-selector { gap: 4px; margin-bottom: 10px; }
+    .wave-btn { padding: 7px 2px; font-size: 10px; }
+
+    /* ── Params grid: fix overflow + compact ── */
+    .params-grid { gap: 6px; margin-bottom: 8px; }
+    .param {
+      padding: 8px 10px;
+      min-width: 0;   /* prevent grid blowout */
+      overflow: hidden;
+    }
+    .param-label {
+      font-size: 9px;
+      margin-bottom: 6px;
+    }
+    .param-val { font-size: 11px; }
+    input[type="range"] { height: 4px; }
+
     /* Sidebar & panel: fixed bottom sheets */
     .sidebar,
     .panel {
