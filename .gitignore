@@ -15,3 +15,6 @@ npm-debug.log*
 
 # Personal scratch memo
 覚書.txt
+
+# Server-side PHP proxy (contains API keys — never commit)
+server-php/
