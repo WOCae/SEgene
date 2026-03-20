@@ -1,4 +1,4 @@
-﻿  /* ── Temp Board (right panel card tray) ── */
+  /* ── Temp Board (right panel card tray) ── */
   .tboard-section {
     display: flex;
     flex-direction: column;
@@ -172,12 +172,12 @@
   }
   .tboard-drop-indicator.visible { display: block; }
 
-  /* ── Mobile: bottom tab navigation (max-width: 900px) */
+  /* ── Mobile: bottom tab navigation (max-width: 768px) */
   .mobile-tabbar {
     display: none;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 768px) {
     body {
       min-height: 100dvh;
       height: 100dvh;

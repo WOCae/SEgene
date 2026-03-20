@@ -109,7 +109,8 @@ Object.assign(window, {
 });
 
 // Mobile layout tabs (narrow viewport)
-const MOBILE_TAB_MQ = window.matchMedia('(max-width: 900px)');
+// 800x600 でも標準（3カラム）表示に寄せるため、閾値を下げる
+const MOBILE_TAB_MQ = window.matchMedia('(max-width: 768px)');
 const appLayout = document.getElementById('appLayout');
 const mobileTabbar = document.getElementById('mobileTabbar');
 
