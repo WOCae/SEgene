@@ -148,6 +148,86 @@ mobileTabbar?.addEventListener('click', (e) => {
 MOBILE_TAB_MQ.addEventListener('change', syncMobileTabUI);
 syncMobileTabUI();
 
+// Panel resizers (drag horizontally)
+function initPanelResizers() {
+  const layout = document.getElementById('appLayout');
+  const leftResizer = document.getElementById('leftResizer');
+  const rightResizer = document.getElementById('rightResizer');
+
+  if (!layout || !leftResizer || !rightResizer) return;
+
+  const MIN_LEFT = 160;
+  const MIN_RIGHT = 180;
+  const MIN_CENTER = 240;
+
+  const RESIZER_W = 8;
+
+  const getCurrentVars = () => {
+    const cols = getComputedStyle(layout).gridTemplateColumns.split(' ');
+    const leftW = parseFloat(cols[0]) || 260;
+    const rightW = parseFloat(cols[cols.length - 1]) || 280;
+    return { leftW, rightW, resizerW: RESIZER_W };
+  };
+
+  const setVars = (leftW, rightW) => {
+    layout.style.gridTemplateColumns = `${leftW}px ${RESIZER_W}px 1fr ${RESIZER_W}px ${rightW}px`;
+  };
+
+  let dragging = null;
+  let activePointerId = null;
+  let startX = 0;
+  let startLeftW = 0;
+  let startRightW = 0;
+
+  const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+  const onPointerMove = (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
+    const dx = e.clientX - startX;
+    const layoutW = layout.getBoundingClientRect().width;
+    if (layoutW <= 0) return;
+
+    if (dragging === 'left') {
+      const maxLeft = layoutW - MIN_RIGHT - 2 * RESIZER_W - MIN_CENTER;
+      const newLeft = clamp(startLeftW + dx, MIN_LEFT, maxLeft);
+      setVars(newLeft, startRightW);
+    } else {
+      const maxRight = layoutW - MIN_LEFT - 2 * RESIZER_W - MIN_CENTER;
+      const newRight = clamp(startRightW - dx, MIN_RIGHT, maxRight);
+      setVars(startLeftW, newRight);
+    }
+  };
+
+  const onPointerUp = (e) => {
+    if (activePointerId !== e.pointerId) return;
+    dragging = null;
+    activePointerId = null;
+    layout.classList.remove('is-resizing');
+    document.body.style.cursor = '';
+  };
+
+  const startDrag = (which) => (e) => {
+    if (MOBILE_TAB_MQ.matches) return;
+    e.preventDefault();
+    dragging = which;
+    activePointerId = e.pointerId;
+    startX = e.clientX;
+    const { leftW, rightW } = getCurrentVars();
+    startLeftW = leftW;
+    startRightW = rightW;
+    layout.classList.add('is-resizing');
+    document.body.style.cursor = 'col-resize';
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+
+  leftResizer.addEventListener('pointerdown', startDrag('left'));
+  rightResizer.addEventListener('pointerdown', startDrag('right'));
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+}
+
+initPanelResizers();
+
 // Init
 renderPresets();
 drawWaveform();
