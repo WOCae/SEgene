@@ -265,13 +265,15 @@ initPanelResizers();
 
 // Theme switcher
 const THEMES = [
-  { id: 'indigo',  color: '#6c63ff', label: 'Indigo'  },
-  { id: 'teal',    color: '#40c4aa', label: 'Teal'    },
-  { id: 'amber',   color: '#ffb74d', label: 'Amber'   },
-  { id: 'coral',   color: '#ff6b6b', label: 'Coral'   },
-  { id: 'emerald', color: '#39d98a', label: 'Emerald' },
-  { id: 'rose',    color: '#f06292', label: 'Rose'    },
-  { id: 'mono',    color: '#aaaaaa', label: 'Mono'    },
+  { id: 'indigo',       color: '#6c63ff', label: 'Indigo'       },
+  { id: 'teal',         color: '#40c4aa', label: 'Teal'         },
+  { id: 'amber',        color: '#ffb74d', label: 'Amber'        },
+  { id: 'coral',        color: '#ff6b6b', label: 'Coral'        },
+  { id: 'emerald',      color: '#39d98a', label: 'Emerald'      },
+  { id: 'rose',         color: '#f06292', label: 'Rose'         },
+  { id: 'mono',         color: '#aaaaaa', label: 'Mono'         },
+  { id: 'pixel',        color: '#00ff41', label: 'Pixel',       pixel: true },
+  { id: 'pixel-amber',  color: '#ffaa00', label: 'Pixel Amber', pixel: true },
 ];
 
 function applyTheme(id) {
@@ -285,9 +287,9 @@ function applyTheme(id) {
 function initTheme() {
   const container = document.getElementById('themeSwatches');
   if (container) {
-    THEMES.forEach(({ id, color, label }) => {
+    THEMES.forEach(({ id, color, label, pixel }) => {
       const btn = document.createElement('button');
-      btn.className = 'theme-swatch';
+      btn.className = 'theme-swatch' + (pixel ? ' is-pixel' : '');
       btn.dataset.themeId = id;
       btn.title = label;
       btn.style.background = color;

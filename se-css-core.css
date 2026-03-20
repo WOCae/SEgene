@@ -1,4 +1,4 @@
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
   :root {
     --bg: #0d0f14;
@@ -68,6 +68,88 @@
     --accent: #aaaaaa; --accent2: #cccccc;
     --cat-8bit: #cccccc; --cat-real: #cccccc; --cat-ui: #cccccc; --cat-env: #cccccc;
   }
+
+  /* ── Pixel themes ── */
+  [data-theme="pixel"],
+  [data-theme="pixel-amber"] {
+    --mono: 'Press Start 2P', monospace;
+  }
+  [data-theme="pixel"] {
+    --bg: #000000; --bg2: #070d07; --bg3: #0d180d; --bg4: #142414;
+    --border: #1a4a1a; --border2: #2a6a2a;
+    --text: #33ff33; --text2: #22cc22; --text3: #116611;
+    --accent: #00ff41; --accent2: #88ffaa;
+    --cat-8bit: #88ffaa; --cat-real: #00ff41; --cat-ui: #00cc33; --cat-env: #009922;
+  }
+  [data-theme="pixel-amber"] {
+    --bg: #0a0700; --bg2: #130e00; --bg3: #1c1600; --bg4: #261e00;
+    --border: #4a3800; --border2: #6a5200;
+    --text: #ffcc00; --text2: #cc9900; --text3: #886600;
+    --accent: #ffaa00; --accent2: #ffdd66;
+    --cat-8bit: #ffdd66; --cat-real: #ff8800; --cat-ui: #ffcc00; --cat-env: #ffaa00;
+  }
+
+  /* ── Pixel theme structural overrides ── */
+  [data-theme="pixel"] *,
+  [data-theme="pixel-amber"] * {
+    border-radius: 0 !important;
+    image-rendering: pixelated;
+  }
+  /* Pixel-style offset shadow on cards & buttons */
+  [data-theme="pixel"] .preset-card,
+  [data-theme="pixel-amber"] .preset-card {
+    border-width: 2px;
+    box-shadow: none;
+  }
+  [data-theme="pixel"] .preset-card:hover,
+  [data-theme="pixel-amber"] .preset-card:hover,
+  [data-theme="pixel"] .preset-card.active,
+  [data-theme="pixel-amber"] .preset-card.active {
+    box-shadow: 3px 3px 0 var(--accent);
+    transform: translate(-1px, -1px);
+  }
+  [data-theme="pixel"] .param,
+  [data-theme="pixel-amber"] .param,
+  [data-theme="pixel"] .tcard,
+  [data-theme="pixel-amber"] .tcard {
+    border-width: 2px;
+  }
+  [data-theme="pixel"] .btn-play,
+  [data-theme="pixel-amber"] .btn-play,
+  [data-theme="pixel"] .mobile-play-btn,
+  [data-theme="pixel-amber"] .mobile-play-btn {
+    box-shadow: 4px 4px 0 var(--accent2);
+    transition: box-shadow 0.05s, transform 0.05s;
+  }
+  [data-theme="pixel"] .btn-play:active,
+  [data-theme="pixel-amber"] .btn-play:active,
+  [data-theme="pixel"] .mobile-play-btn:active,
+  [data-theme="pixel-amber"] .mobile-play-btn:active {
+    box-shadow: 1px 1px 0 var(--accent2);
+    transform: translate(3px, 3px);
+  }
+  [data-theme="pixel"] .wave-btn.active,
+  [data-theme="pixel-amber"] .wave-btn.active {
+    box-shadow: 2px 2px 0 var(--accent);
+  }
+  /* Scanline overlay */
+  [data-theme="pixel"] body::after,
+  [data-theme="pixel-amber"] body::after {
+    content: '';
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0, 0, 0, 0.08) 3px,
+      rgba(0, 0, 0, 0.08) 4px
+    );
+  }
+  /* Square swatches for pixel themes */
+  .theme-swatch.is-pixel { border-radius: 3px !important; }
 
   /* ── Theme swatches UI ── */
   .theme-swatches {
