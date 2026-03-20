@@ -87,7 +87,7 @@ export async function loadUserPreset(id) {
 
   closeManager();
   showToast(t('toast.loaded', p.name));
-  setTimeout(() => playSE(), 80);
+  if (state.autoPlayOnEdit) setTimeout(() => playSE(), 80);
 }
 
 export async function exportAllJSON() {

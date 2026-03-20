@@ -137,8 +137,8 @@ export function loadPreset(cat, idx) {
   document.getElementById('presetInfoName').textContent = isEn ? (p.nameEn || p.name) : p.name;
   document.getElementById('presetInfoDesc').textContent = isEn ? (p.descEn || p.desc) : p.desc;
 
-  // Auto play
-  setTimeout(() => playSE(), 50);
+  // Auto play (conditional)
+  if (state.autoPlayOnEdit) setTimeout(() => playSE(), 50);
 }
 
 /**

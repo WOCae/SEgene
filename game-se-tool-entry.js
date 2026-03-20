@@ -107,6 +107,7 @@ Object.assign(window, {
   pseqQuick,
   pseqToggleMute,
   togglePseq,
+  toggleAutoPlayOnEdit,
   playSE,
   exportWAV,
   exportOGG,
@@ -133,6 +134,56 @@ Object.assign(window, {
   tbDrop,
   tbRenameCard,
 });
+
+// ---------- Auto play (edit sliders & presets) ----------
+const EDIT_SLIDER_IDS = [
+  'attack',
+  'decay',
+  'sustain',
+  'release',
+  'frequency',
+  'sweep',
+  'cutoff',
+  'resonance',
+  'distortion',
+  'reverb',
+  'vibrato',
+  'duration',
+];
+
+let _editAutoTimer = null;
+function scheduleEditorAutoPlay() {
+  if (!state.autoPlayOnEdit) return;
+  clearTimeout(_editAutoTimer);
+  _editAutoTimer = setTimeout(() => {
+    if (state.autoPlayOnEdit) playSE();
+  }, 220); // "finished moving" debounce
+}
+
+function initAutoPlayOnEdit() {
+  EDIT_SLIDER_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    // `oninput="updateParam(...)"` already updates state; we only trigger playback when the user stops.
+    el.addEventListener('input', scheduleEditorAutoPlay);
+    el.addEventListener('change', scheduleEditorAutoPlay);
+  });
+}
+
+function syncAutoPlayToggleUI() {
+  const cb = document.getElementById('autoPlayOnEdit');
+  if (!cb) return;
+  cb.checked = !!state.autoPlayOnEdit;
+}
+
+function toggleAutoPlayOnEdit(checked) {
+  state.autoPlayOnEdit = !!checked;
+  if (!state.autoPlayOnEdit) clearTimeout(_editAutoTimer);
+  scheduleSessionSave();
+  syncAutoPlayToggleUI();
+}
+
+initAutoPlayOnEdit();
 
 // Keep MQ reference for panel resizer (disables drag on mobile)
 const MOBILE_TAB_MQ = window.matchMedia('(max-width: 768px)');
@@ -446,6 +497,9 @@ async function restoreSessionData(session) {
   // IDB からセッション復元（あれば上書き）
   const session = await dbRestoreSession();
   if (session) await restoreSessionData(session);
+
+  // Restore -> reflect auto-play toggle UI
+  syncAutoPlayToggleUI();
 
   drawWaveform();
   syncVolumeSlider();

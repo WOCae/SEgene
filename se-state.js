@@ -5,7 +5,11 @@ export const state = {
   cutoff: 8000, resonance: 1, filterType: 'lowpass',
   distortion: 0, reverb: 0, vibrato: 0,
   duration: 500,
-  volume: 0.8
+  volume: 0.8,
+
+  // When enabled, auto-play after editing sliders and when clicking presets.
+  // (Used for ADSR/pitch/filter/effects sliders in the editor area.)
+  autoPlayOnEdit: true
 };
 
 // UI/保存名など「状態」だが editor 側で更新されるものをまとめる
