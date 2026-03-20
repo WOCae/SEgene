@@ -14,15 +14,32 @@ registerExportStopHandlers({
   stopPseqIfPlaying: () => { if (PSEQ.playing) pseqStop(); }
 });
 
+function openHelp() {
+  closeManager();
+  closeCompare();
+  const overlay = document.getElementById('helpOverlay');
+  if (!overlay) return;
+  overlay.classList.add('open');
+}
+
+function closeHelp() {
+  const overlay = document.getElementById('helpOverlay');
+  overlay?.classList.remove('open');
+}
+
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeManager();
     closeCompare();
+    closeHelp();
     if (ARP.playing) arpStop();
     if (PSEQ.playing) pseqStop();
     return;
   }
+
+  // Help モーダル表示中はキー操作を抑止（Esc のみ例外）
+  if (document.getElementById('helpOverlay')?.classList.contains('open')) return;
 
   if (e.target.tagName === 'INPUT' || e.target.contentEditable === 'true') return;
 
@@ -57,6 +74,8 @@ Object.assign(window, {
   closeManager,
   openCompare,
   closeCompare,
+  openHelp,
+  closeHelp,
   saveCurrentPreset,
   exportAllJSON,
   importJSON,
@@ -243,6 +262,43 @@ function initPanelResizers() {
 }
 
 initPanelResizers();
+
+// Theme switcher
+const THEMES = [
+  { id: 'indigo',  color: '#6c63ff', label: 'Indigo'  },
+  { id: 'teal',    color: '#40c4aa', label: 'Teal'    },
+  { id: 'amber',   color: '#ffb74d', label: 'Amber'   },
+  { id: 'coral',   color: '#ff6b6b', label: 'Coral'   },
+  { id: 'emerald', color: '#39d98a', label: 'Emerald' },
+  { id: 'rose',    color: '#f06292', label: 'Rose'    },
+  { id: 'mono',    color: '#aaaaaa', label: 'Mono'    },
+];
+
+function applyTheme(id) {
+  document.documentElement.setAttribute('data-theme', id);
+  localStorage.setItem('se-theme', id);
+  document.querySelectorAll('.theme-swatch').forEach(el => {
+    el.classList.toggle('is-active', el.dataset.themeId === id);
+  });
+}
+
+function initTheme() {
+  const container = document.getElementById('themeSwatches');
+  if (container) {
+    THEMES.forEach(({ id, color, label }) => {
+      const btn = document.createElement('button');
+      btn.className = 'theme-swatch';
+      btn.dataset.themeId = id;
+      btn.title = label;
+      btn.style.background = color;
+      btn.addEventListener('click', () => applyTheme(id));
+      container.appendChild(btn);
+    });
+  }
+  applyTheme(localStorage.getItem('se-theme') || 'indigo');
+}
+
+initTheme();
 
 // Init
 renderPresets();

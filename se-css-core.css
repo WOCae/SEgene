@@ -1,4 +1,4 @@
-﻿  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
   :root {
     --bg: #0d0f14;
@@ -24,6 +24,73 @@
     --mono: 'Space Mono', monospace;
     --sans: 'Noto Sans JP', sans-serif;
   }
+
+  /* ── Themes ── */
+  [data-theme="teal"] {
+    --bg: #09141c; --bg2: #0e1c26; --bg3: #142530; --bg4: #1a2e3c;
+    --border: #1e3040; --border2: #2a4456;
+    --text2: #7ab0c0; --text3: #4a7080;
+    --accent: #40c4aa; --accent2: #72d9c4;
+    --cat-8bit: #72d9c4;
+  }
+  [data-theme="amber"] {
+    --bg: #15110a; --bg2: #1e180e; --bg3: #281e12; --bg4: #322616;
+    --border: #3a2c18; --border2: #4e3c22;
+    --text2: #b89060; --text3: #80622e;
+    --accent: #ffb74d; --accent2: #ffd080;
+    --cat-8bit: #ffd080;
+  }
+  [data-theme="coral"] {
+    --bg: #150d0d; --bg2: #1e1212; --bg3: #281818; --bg4: #321e1e;
+    --border: #3a2020; --border2: #4e2c2c;
+    --text2: #b87878; --text3: #805050;
+    --accent: #ff6b6b; --accent2: #ff9494;
+    --cat-8bit: #ff9494;
+  }
+  [data-theme="emerald"] {
+    --bg: #0a1510; --bg2: #0e1e16; --bg3: #14271c; --bg4: #1a3022;
+    --border: #1e3828; --border2: #284e38;
+    --text2: #6ab080; --text3: #3a7050;
+    --accent: #39d98a; --accent2: #6aeba8;
+    --cat-8bit: #6aeba8;
+  }
+  [data-theme="rose"] {
+    --bg: #150a10; --bg2: #1e0f18; --bg3: #281420; --bg4: #321a28;
+    --border: #3a1e2e; --border2: #4e2840;
+    --text2: #b87098; --text3: #804868;
+    --accent: #f06292; --accent2: #f897b7;
+    --cat-8bit: #f897b7;
+  }
+  [data-theme="mono"] {
+    --bg: #0c0c0c; --bg2: #141414; --bg3: #1c1c1c; --bg4: #242424;
+    --border: #2a2a2a; --border2: #363636;
+    --text2: #909090; --text3: #585858;
+    --accent: #aaaaaa; --accent2: #cccccc;
+    --cat-8bit: #cccccc; --cat-real: #cccccc; --cat-ui: #cccccc; --cat-env: #cccccc;
+  }
+
+  /* ── Theme swatches UI ── */
+  .theme-swatches {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+  }
+  .theme-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.12s, border-color 0.12s;
+    flex-shrink: 0;
+  }
+  .theme-swatch:hover { transform: scale(1.18); }
+  .theme-swatch.is-active {
+    border-color: var(--text);
+    transform: scale(1.1);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
@@ -555,6 +622,35 @@
     border-top: 1px solid var(--border);
     display: flex;
     gap: 8px;
+  }
+
+  /* Help Modal */
+  .help-modal {
+    width: 920px;
+    max-width: 95vw;
+    max-height: 88vh;
+  }
+  .help-body {
+    color: var(--text2);
+    line-height: 1.7;
+    font-size: 12.5px;
+  }
+  .help-h3 {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin: 14px 0 8px;
+  }
+  .help-body ul {
+    margin: 0 0 10px 18px;
+  }
+  .help-body li {
+    margin-bottom: 6px;
+  }
+  .help-footer {
+    justify-content: flex-end;
   }
   .saved-preset-row {
     display: flex;
