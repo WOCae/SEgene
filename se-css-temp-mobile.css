@@ -268,20 +268,57 @@
       box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
     }
 
-    .mobile-play-btn {
+    .mobile-play-row {
+      display: flex;
+      align-items: stretch;
       height: 52px;
+    }
+
+    .mobile-play-btn {
+      flex: 0 0 42%;
       background: var(--accent);
       color: #fff;
       border: none;
+      border-right: 1px solid rgba(255,255,255,0.12);
       font-family: var(--mono);
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: 3px;
+      letter-spacing: 2px;
       cursor: pointer;
       transition: background 0.12s;
       -webkit-tap-highlight-color: transparent;
     }
     .mobile-play-btn:active { background: var(--accent2); }
+
+    .mobile-vol-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      background: rgba(108, 99, 255, 0.08);
+    }
+    .mobile-vol-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text3);
+      letter-spacing: 1px;
+      flex-shrink: 0;
+    }
+    .mobile-vol-slider {
+      flex: 1;
+      accent-color: var(--accent);
+      height: 4px;
+      cursor: pointer;
+    }
+    .mobile-vol-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent2);
+      flex-shrink: 0;
+      min-width: 32px;
+      text-align: right;
+    }
 
     .mobile-sheet-handles {
       display: flex;

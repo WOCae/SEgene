@@ -41,6 +41,12 @@ export function syncVolumeSlider() {
   el.value = String(pct);
   lab.textContent = pct + '%';
   if (masterGain) masterGain.gain.value = v;
+
+  // Sync mobile volume slider if present
+  const mEl = document.getElementById('mobileVolume');
+  const mLab = document.getElementById('mobileVol');
+  if (mEl) mEl.value = String(pct);
+  if (mLab) mLab.textContent = pct + '%';
 }
 
 export function updateVolume(val) {

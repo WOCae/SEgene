@@ -16,6 +16,7 @@
   <span class="badge">v1.2</span>
   <button class="badge" onclick="openManager()" style="cursor:pointer;background:rgba(108,99,255,.15);border-color:rgba(108,99,255,.4);color:var(--accent2)">⊞ PRESET MANAGER</button>
   <button class="badge" onclick="openCompare()" style="cursor:pointer;background:rgba(64,196,170,.12);border-color:rgba(64,196,170,.4);color:var(--teal)">⊟ SE 比較</button>
+  <button class="badge" onclick="openHelp()" style="cursor:pointer;background:rgba(255,183,77,.08);border-color:rgba(255,183,77,.28);color:var(--amber)">? HELP</button>
   <div class="header-status">
     <div class="dot"></div>
     <span>READY</span>
@@ -67,6 +68,82 @@
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- Help Modal -->
+<div class="help-overlay modal-overlay" id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div class="help-modal modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-header">
+      <span class="modal-title" id="helpTitle">HELP — 使い方 / 操作</span>
+      <button class="modal-close" onclick="closeHelp()">✕</button>
+    </div>
+    <div class="modal-body help-body">
+      <h3 class="help-h3">このツールでできること</h3>
+      <p>左のプリセットからパラメータを読み込み、中央のエディタで波形・ADSR・フィルタ/エフェクト等を調整し、<b>再生</b> / <b>波形表示</b> / <b>WAV/OGG 書き出し</b>できます。</p>
+
+      <h3 class="help-h3">画面の構成</h3>
+      <ul>
+        <li><b>左（PRESETS）</b>：カテゴリ（8BIT/REAL/UI/ENV）とプリセット一覧。選択で右側のエディタへ反映されます。</li>
+        <li><b>中央（エディタ）</b>：OSCILLATOR / ENVELOPE(ADSR) / PITCH / FILTER / EFFECTS。波形選択・スライダーで現在の <span style="font-family:var(--mono)">state</span> を更新します。</li>
+        <li><b>ARPEGGIATOR</b>：A で開始/停止。グリッドの各ステップに対して音程が生成されます。</li>
+        <li><b>PITCH SEQUENCER</b>：P で表示切替。ON の場合は開始/停止も同時に制御されます。</li>
+        <li><b>右（パネル）</b>：PLAY / EXPORT / RANDOMIZE / TEMP BOARD / OPTIONS（PSEQ 表示トグル等）。</li>
+      </ul>
+
+      <h3 class="help-h3">基本操作（マウス/タップ）</h3>
+      <ul>
+        <li>OSCILLATOR の波形ボタン（SQUARE/SINE/SAW/TRI/NOISE）をクリック。</li>
+        <li>各スライダーで ADSR・フィルタ・FX 等を調整（値は画面ラベルと state に反映）。</li>
+        <li>PLAY で単発の再生（または Space キーでも同様）。</li>
+        <li>ARP/PSEQ の開始/停止ボタンを押す。</li>
+        <li>プリセットを選択して現在の設定を切り替える。</li>
+      </ul>
+
+      <h3 class="help-h3">ショートカットキー</h3>
+      <ul>
+        <li><kbd class="kbd">Space</kbd>：再生 / （ARP/PSEQ が動作中なら）停止優先</li>
+        <li><kbd class="kbd">R</kbd>：RANDOMIZE PARAMS</li>
+        <li><kbd class="kbd">S</kbd>：PRESET MANAGER を開く</li>
+        <li><kbd class="kbd">T</kbd>：TEMP BOARD に「現在の設定」を追加</li>
+        <li><kbd class="kbd">C</kbd>：SE 比較（COMPARE）スロットに追加</li>
+        <li><kbd class="kbd">A</kbd>：ARPEGGIATOR 開始/停止</li>
+        <li><kbd class="kbd">P</kbd>：PITCH SEQUENCER の表示切替（必要なら開始/停止も連動）</li>
+        <li><kbd class="kbd">Esc</kbd>：開いているモーダルを閉じ、必要に応じて ARP/PSEQ を停止</li>
+      </ul>
+
+      <h3 class="help-h3">TEMP BOARD（右のカード一覧）</h3>
+      <ul>
+        <li><b>＋ 現在を保存</b> または <kbd class="kbd">T</kbd>：現在の設定をカードとして保存。</li>
+        <li><b>全消去</b>：カードをまとめて削除。</li>
+        <li><b>ドラッグ&ドロップ</b>：カード順を並べ替え。</li>
+        <li><b>カード名クリック</b>：カード名の編集（クリック後に編集欄にできます）。</li>
+      </ul>
+
+      <h3 class="help-h3">プリセット管理 / JSON</h3>
+      <ul>
+        <li><b>保存</b>：現在の設定を JSON として保存（localStorage を利用）。</li>
+        <li><b>エクスポート</b>：すべて/単体を JSON でダウンロード。</li>
+        <li><b>インポート</b>：JSON を読み込んでプリセットを復元。</li>
+      </ul>
+
+      <h3 class="help-h3">書き出し（WAV / OGG）</h3>
+      <ul>
+        <li><b>EXPORT WAV</b>：WAV を生成してダウンロード。</li>
+        <li><b>EXPORT OGG</b>：録音（MediaRecorder）で OGG を生成してダウンロード。</li>
+        <li>ARP/PSEQ を同時に鳴らしていると混在しやすいため、必要に応じて停止して書き出しされます。</li>
+      </ul>
+
+      <h3 class="help-h3">モバイル（狭い幅）の表示</h3>
+      <p>画面幅が狭い場合、下部のタブで「プリセット / 編集 / ツール」を切り替えます。</p>
+
+      <p style="margin-top:14px;color:var(--text3);font-size:11px;">
+        もし挙動がおかしい場合：一度リロードしてください。音の書き出しは環境（ブラウザ設定、録音の許可など）に依存します。
+      </p>
+    </div>
+    <div class="modal-footer help-footer">
+      <button class="btn-secondary" style="font-size:11px;width:auto;padding:10px 14px" onclick="closeHelp()">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <div class="layout" id="appLayout" data-mobile-tab="presets">
   <!-- Presets Sidebar -->
@@ -386,7 +463,14 @@
 </div>
 
 <div class="mobile-footer" id="mobileFooter">
-  <button class="mobile-play-btn" onclick="playSE()" id="mobilePlayBtn">▶ PLAY</button>
+  <div class="mobile-play-row">
+    <button class="mobile-play-btn" onclick="playSE()" id="mobilePlayBtn">▶ PLAY</button>
+    <div class="mobile-vol-wrap">
+      <span class="mobile-vol-label">VOL</span>
+      <input class="mobile-vol-slider" type="range" id="mobileVolume" min="0" max="100" value="80" oninput="updateVolume(this.value)">
+      <span class="mobile-vol-val" id="mobileVol">80%</span>
+    </div>
+  </div>
   <div class="mobile-sheet-handles">
     <button class="mobile-sheet-trigger" id="triggerPreset" onclick="toggleMobileSheet('preset')">≡ プリセット</button>
     <button class="mobile-sheet-trigger" id="triggerTools" onclick="toggleMobileSheet('tools')">⚙ 出力・設定</button>
