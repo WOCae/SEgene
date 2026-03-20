@@ -14,7 +14,14 @@ export const state = {
 
 // UI/保存名など「状態」だが editor 側で更新されるものをまとめる
 export const app = {
+  // Built-in presets UI
   currentCategory: '8bit',
-  activePreset: null
+
+  // Active item name (used by compare + temp board)
+  activePreset: null,
+
+  // User library selection (game -> subtab -> item)
+  activeUserGameId: null,
+  activeUserSubTabId: null
 };
 

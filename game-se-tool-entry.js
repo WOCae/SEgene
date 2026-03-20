@@ -1,6 +1,41 @@
-import { renderPresets, loadPreset, setCategory, setWave, updateParam, updateVolume, updateFilter, randomize, syncVolumeSlider, applyStateToUI } from './se-editor-ui.js';
-import { drawWaveform, playSE, exportWAV, exportOGG, registerExportStopHandlers } from './se-audio-engine.js';
-import { openManager, closeManager, saveCurrentPreset, exportAllJSON, exportSingleJSON, importJSON, loadUserPreset, deleteUserPreset } from './se-json-manager.js';
+import {
+  renderPresets,
+  loadPreset,
+  setCategory,
+  setWave,
+  updateParam,
+  updateVolume,
+  updateFilter,
+  randomize,
+  syncVolumeSlider,
+  applyStateToUI,
+  initLibraryTabs,
+  refreshLibraryTabs,
+  selectBuiltInLibrary,
+  selectUserGame,
+  selectUserSubTab,
+  addUserGame,
+  deleteUserGame,
+  renameUserGame,
+  copyUserGame,
+  addUserSubTab,
+  deleteUserSubTab,
+  renameUserSubTab,
+  copyUserSubTab
+} from './se-editor-ui.js';
+import { openLibraryModal, closeLibraryModal, applyLibraryModalSelection } from './se-editor-ui.js';
+import { drawWaveform, playSE, exportWAV, exportOGG, exportMP3, registerExportStopHandlers } from './se-audio-engine.js';
+import {
+  openManager,
+  closeManager,
+  saveCurrentPreset,
+  exportAllJSON,
+  exportSingleJSON,
+  importJSON,
+  loadUserPreset,
+  deleteUserPreset,
+  renameItemInActiveSubTab
+} from './se-json-manager.js';
 import { openCompare, closeCompare, cmpPlayAll, cmpPlaySequential, cmpAddSlot, cmpPlaySlot, cmpCaptureSlot, cmpLoadToEditor, cmpDeleteSlot } from './se-compare.js';
 import { ARP, arpBpmChange, arpDivChange, arpStepsChange, arpStart, arpStop, arpRebuildNotes, arpPattern, initArp } from './se-arp.js';
 import { PSEQ, pseqBpmChange, pseqDivChange, pseqLenChange, pseqStart, pseqStop, pseqRebuild, pseqQuick, pseqToggleMute, togglePseq, initPseq } from './se-pseq.js';
@@ -9,6 +44,7 @@ import { showToast } from './se-toast.js';
 import { state, app } from './se-state.js';
 import { setSessionSaver, dbSaveSession, dbRestoreSession, migrateFromLocalStorage, scheduleSessionSave } from './se-db.js';
 import { t, setLang, getLang, applyI18n } from './se-i18n.js';
+import { openAiGenerator, closeAiGenerator, aiGenOnProviderChange, aiGenOnModelSelectChange, aiGenSetExample, aiGenGenerate, aiGenPreview, aiGenApply, aiGenRefreshModels, initAiGenerator } from './se-ai-generator.js';
 
 // exportOGG 用: 録音中の混在を避けるために、必要なら ARP/PSEQ を停止
 registerExportStopHandlers({
@@ -39,15 +75,17 @@ document.addEventListener('keydown', e => {
     closeManager();
     closeCompare();
     closeHelp();
+    closeAiGenerator();
     if (ARP.playing) arpStop();
     if (PSEQ.playing) pseqStop();
     return;
   }
 
-  // Help モーダル表示中はキー操作を抑止（Esc のみ例外）
+  // モーダル表示中はキー操作を抑止（Esc のみ例外）
   if (document.getElementById('helpOverlay')?.classList.contains('open')) return;
+  if (document.getElementById('aiGenOverlay')?.classList.contains('open')) return;
 
-  if (e.target.tagName === 'INPUT' || e.target.contentEditable === 'true') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') return;
 
   if (e.code === 'Space') {
     e.preventDefault();
@@ -87,6 +125,20 @@ Object.assign(window, {
   exportAllJSON,
   importJSON,
   setCategory,
+  selectBuiltInLibrary,
+  selectUserGame,
+  selectUserSubTab,
+  addUserGame,
+  deleteUserGame,
+  renameUserGame,
+  copyUserGame,
+  addUserSubTab,
+  deleteUserSubTab,
+  renameUserSubTab,
+  copyUserSubTab,
+  openLibraryModal,
+  closeLibraryModal,
+  applyLibraryModalSelection,
   setWave,
   updateParam,
   updateVolume,
@@ -111,6 +163,7 @@ Object.assign(window, {
   playSE,
   exportWAV,
   exportOGG,
+  exportMP3,
   randomize,
   tbAdd,
   tbClearAll,
@@ -133,6 +186,19 @@ Object.assign(window, {
   tbDragOver,
   tbDrop,
   tbRenameCard,
+  renameItemInActiveSubTab,
+  openLibraryModal,
+  closeLibraryModal,
+  applyLibraryModalSelection,
+  openAiGenerator,
+  closeAiGenerator,
+  aiGenOnProviderChange,
+  aiGenSetExample,
+  aiGenGenerate,
+  aiGenPreview,
+  aiGenApply,
+  aiGenRefreshModels,
+  aiGenOnModelSelectChange,
 });
 
 // ---------- Auto play (edit sliders & presets) ----------
@@ -376,6 +442,8 @@ function collectSession() {
     state: { ...state },
     currentCategory: app.currentCategory,
     activePreset: app.activePreset,
+    activeUserGameId: app.activeUserGameId,
+    activeUserSubTabId: app.activeUserSubTabId,
     panelCols: { leftW, rightW },
     arp: {
       bpm:   ARP.bpm,
@@ -413,13 +481,10 @@ async function restoreSessionData(session) {
   if (session.currentCategory) {
     app.currentCategory = session.currentCategory;
     app.activePreset = session.activePreset ?? null;
-    renderPresets();
-    document.querySelectorAll('.cat-tab').forEach(b => {
-      ['8bit', 'real', 'ui', 'env'].forEach(c => b.classList.remove('active-' + c));
-    });
-    const catBtn = [...document.querySelectorAll('.cat-tab')]
-      .find(b => b.getAttribute('onclick')?.includes(`'${session.currentCategory}'`));
-    if (catBtn) catBtn.classList.add('active-' + session.currentCategory);
+
+    // Restore user library selection (UI will be rebuilt by refreshLibraryTabs)
+    app.activeUserGameId = session.activeUserGameId ?? null;
+    app.activeUserSubTabId = session.activeUserSubTabId ?? null;
 
     // プリセット名表示
     if (session.activePreset) {
@@ -489,14 +554,17 @@ async function restoreSessionData(session) {
   await migrateFromLocalStorage();
 
   // デフォルト状態で初期化
-  renderPresets();
+  await initLibraryTabs();
   initArp();
   initPseq();
   await initTb();
+  initAiGenerator();
 
   // IDB からセッション復元（あれば上書き）
   const session = await dbRestoreSession();
   if (session) await restoreSessionData(session);
+  // Rebuild library UI after session restore
+  await refreshLibraryTabs();
 
   // Restore -> reflect auto-play toggle UI
   syncAutoPlayToggleUI();

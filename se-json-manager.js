@@ -1,24 +1,46 @@
-import { state } from './se-state.js';
-import { playSE, masterGain } from './se-audio-engine.js';
+import { state, app } from './se-state.js';
 import { showToast } from './se-toast.js';
-import { updateParam, syncVolumeSlider } from './se-editor-ui.js';
-import { dbGetUserPresets, dbSaveUserPresets } from './se-db.js';
-import { t, getLang } from './se-i18n.js';
+import { updateParam, syncVolumeSlider, renderPresets } from './se-editor-ui.js';
+import {
+  dbGetUserGame,
+  dbAddItemToSubTab,
+  dbDeleteItemFromSubTab,
+  dbRenameItemInSubTab
+} from './se-db.js';
+import { t } from './se-i18n.js';
+
+function _assertActiveUserSubTab() {
+  if (!app.activeUserGameId || !app.activeUserSubTabId) return false;
+  return true;
+}
+
+async function _getActiveSubTabItems() {
+  if (!_assertActiveUserSubTab()) return { game: null, subTab: null, items: [] };
+  const game = await dbGetUserGame(app.activeUserGameId);
+  const sid = String(app.activeUserSubTabId);
+  const subTab = game?.subtabs?.find(s => String(s.id) === sid) || null;
+  const items = subTab?.items || [];
+  return { game, subTab, items };
+}
 
 async function renderSavedPresets() {
-  const list = await dbGetUserPresets();
+  const { items } = await _getActiveSubTabItems();
   const el = document.getElementById('savedPresetList');
 
-  if (!list.length) {
+  if (!items.length) {
     el.innerHTML = `<div class="empty-msg">${t('preset.empty')}</div>`;
     return;
   }
 
-  el.innerHTML = list.slice().reverse().map(p => `
+  el.innerHTML = items.slice().reverse().map(p => `
     <div class="saved-preset-row">
       <div style="flex:1;min-width:0">
-        <div class="saved-preset-name">${p.name}</div>
-        <div class="saved-preset-meta">${p.savedAt} &nbsp;·&nbsp; ${p.params.wave} / ${p.params.frequency}Hz</div>
+        <div class="saved-preset-name"
+          contenteditable="true"
+          spellcheck="false"
+          onblur="renameItemInActiveSubTab(${p.id}, this.textContent.trim())"
+        >${p.name}</div>
+        <div class="saved-preset-meta">${p.updatedAt || ''} &nbsp;·&nbsp; ${p.params?.wave ?? ''} / ${p.params?.frequency ?? ''}Hz</div>
       </div>
       <button class="btn-sm load" onclick="loadUserPreset(${p.id})">${t('preset.load')}</button>
       <button class="btn-sm" onclick="exportSingleJSON(${p.id})">⬇</button>
@@ -28,38 +50,34 @@ async function renderSavedPresets() {
 }
 
 export async function saveCurrentPreset() {
+  if (!_assertActiveUserSubTab()) { showToast('先にユーザーのサブタブを選択してください'); return; }
   const nameEl = document.getElementById('savePresetName');
   const name = nameEl.value.trim();
   if (!name) { showToast(t('toast.nameRequired')); return; }
 
-  const list = await dbGetUserPresets();
-  const entry = {
-    id: Date.now(),
+  await dbAddItemToSubTab(app.activeUserGameId, app.activeUserSubTabId, {
     name,
-    savedAt: new Date().toLocaleString(t('locale')),
     params: { ...state }
-  };
-
-  // Overwrite if same name
-  const idx = list.findIndex(p => p.name === name);
-  if (idx >= 0) list[idx] = entry; else list.push(entry);
-
-  await dbSaveUserPresets(list);
+  });
   nameEl.value = '';
   await renderSavedPresets();
+  // Sidebar を即時更新（サブタブクリック待ちにしない）
+  renderPresets();
   showToast(t('toast.saved', name));
 }
 
 export async function deleteUserPreset(id) {
-  const list = (await dbGetUserPresets()).filter(p => p.id !== id);
-  await dbSaveUserPresets(list);
+  if (!_assertActiveUserSubTab()) return;
+  await dbDeleteItemFromSubTab(app.activeUserGameId, app.activeUserSubTabId, id);
   await renderSavedPresets();
+  renderPresets();
   showToast(t('toast.deleted'));
 }
 
 export async function loadUserPreset(id) {
-  const list = await dbGetUserPresets();
-  const p = list.find(p => p.id === id);
+  if (!_assertActiveUserSubTab()) return;
+  const { items } = await _getActiveSubTabItems();
+  const p = items.find(x => x.id === id);
   if (!p) return;
 
   Object.assign(state, p.params);
@@ -82,32 +100,51 @@ export async function loadUserPreset(id) {
   if (state.filterType) document.getElementById('filterType').value = state.filterType;
   syncVolumeSlider();
 
+  app.activePreset = p.name;
+
+  // Highlight active item button (user library)
+  document.querySelectorAll('.preset-btn').forEach((b) => b.classList.remove('active'));
+  const btn = document.getElementById(`pb-user-${p.id}`);
+  if (btn) btn.classList.add('active');
+
   document.getElementById('presetInfoName').textContent = p.name;
-  document.getElementById('presetInfoDesc').textContent = t('info.savedAt', p.savedAt);
+  document.getElementById('presetInfoDesc').textContent = p.updatedAt ? t('info.savedAt', p.updatedAt) : '';
 
   closeManager();
   showToast(t('toast.loaded', p.name));
-  if (state.autoPlayOnEdit) setTimeout(() => playSE(), 80);
+  // Auto play (conditional)
+  if (state.autoPlayOnEdit) setTimeout(() => window.playSE?.(), 80);
 }
 
 export async function exportAllJSON() {
-  const list = await dbGetUserPresets();
-  if (!list.length) { showToast(t('toast.noPresets')); return; }
+  if (!_assertActiveUserSubTab()) { showToast('サブタブを選択してください'); return; }
+  const { items, subTab, game } = await (async () => {
+    const x = await _getActiveSubTabItems();
+    return { items: x.items, subTab: x.subTab, game: x.game };
+  })();
+  if (!items.length) { showToast(t('toast.noPresets')); return; }
 
-  const blob = new Blob([JSON.stringify({ version: 1, presets: list }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({
+    version: 1,
+    type: 'subtab',
+    game: { id: game?.id, name: game?.name },
+    subTab: { id: subTab?.id, name: subTab?.name },
+    items
+  }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'game-se-presets.json';
+  a.download = (subTab?.name || 'subtab').replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
   a.click();
-  showToast(t('toast.exported', list.length));
+  showToast(t('toast.exported', items.length));
 }
 
 export async function exportSingleJSON(id) {
-  const list = await dbGetUserPresets();
-  const p = list.find(p => p.id === id);
+  if (!_assertActiveUserSubTab()) return;
+  const { items } = await _getActiveSubTabItems();
+  const p = items.find(x => x.id === id);
   if (!p) return;
 
-  const blob = new Blob([JSON.stringify({ version: 1, presets: [p] }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ version: 1, type: 'item', item: p }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = p.name.replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
@@ -115,6 +152,7 @@ export async function exportSingleJSON(id) {
 }
 
 export function importJSON(event) {
+  if (!_assertActiveUserSubTab()) { showToast('サブタブを選択してください'); return; }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -122,22 +160,26 @@ export function importJSON(event) {
   reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      const incoming = data.presets || (Array.isArray(data) ? data : [data]);
-      if (!incoming.length) throw new Error('empty');
+      let incomingItems = [];
+      if (data?.type === 'subtab' && Array.isArray(data.items)) incomingItems = data.items;
+      else if (data?.type === 'item' && data.item) incomingItems = [data.item];
+      else if (Array.isArray(data?.presets)) incomingItems = data.presets;
+      else if (Array.isArray(data)) incomingItems = data;
 
-      const list = await dbGetUserPresets();
+      if (!incomingItems.length) throw new Error('empty');
+
       let added = 0;
-      incoming.forEach(p => {
-        if (!p.name || !p.params) return;
-        p.id = Date.now() + Math.random();
-        p.savedAt = p.savedAt || new Date().toLocaleString(t('locale'));
-        const idx = list.findIndex(x => x.name === p.name);
-        if (idx >= 0) list[idx] = p; else list.push(p);
+      for (const p of incomingItems) {
+        if (!p?.name || !p?.params) continue;
+        await dbAddItemToSubTab(app.activeUserGameId, app.activeUserSubTabId, {
+          name: p.name,
+          params: p.params
+        });
         added++;
-      });
+      }
 
-      await dbSaveUserPresets(list);
       await renderSavedPresets();
+      renderPresets();
       showToast(t('toast.imported', added));
     } catch {
       showToast(t('toast.importFailed'));
@@ -149,6 +191,18 @@ export function importJSON(event) {
 }
 
 export function openManager() {
+  // If Library Modal is open, sync selection from dropdown.
+  const libOverlayOpen = document.getElementById('libraryModalOverlay')?.classList.contains('open');
+  if (libOverlayOpen) {
+    const selGame = document.getElementById('libraryGameSelect');
+    const selSub = document.getElementById('librarySubTabSelect');
+    if (selGame && selSub) {
+      if (selGame.value === '__builtin__') { showToast('Fixed library is read-only'); return; }
+      app.activeUserGameId = selGame.value || null;
+      app.activeUserSubTabId = selSub.value || null;
+    }
+  }
+
   renderSavedPresets(); // async, fire and forget
   document.getElementById('modalOverlay').classList.add('open');
   document.getElementById('savePresetName').focus();
@@ -158,7 +212,16 @@ export function closeManager() {
   document.getElementById('modalOverlay').classList.remove('open');
 }
 
-// Re-render preset list when language changes
+// Rename handler (for inline editing)
+export async function renameItemInActiveSubTab(id, newName) {
+  if (!_assertActiveUserSubTab()) return;
+  if (!newName) return;
+  await dbRenameItemInSubTab(app.activeUserGameId, app.activeUserSubTabId, id, newName);
+  await renderSavedPresets();
+  renderPresets();
+}
+
+// Re-render list when language changes
 document.addEventListener('se:langchange', () => {
   if (document.getElementById('modalOverlay')?.classList.contains('open')) renderSavedPresets();
 });

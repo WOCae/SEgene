@@ -200,6 +200,51 @@ export async function exportWAV() {
   a.click();
 }
 
+export async function exportMP3() {
+  initAudio();
+  const lame = window.lamejs;
+  if (!lame) {
+    showToast(t('toast.mp3NoLame'));
+    return;
+  }
+
+  const dur = state.duration / 1000 + state.release / 1000 + 0.3;
+  const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+  playSEOnCtx(offCtx, offCtx.destination, state);
+  const rendered = await offCtx.startRendering();
+
+  const sampleRate = rendered.sampleRate;
+  const left = rendered.getChannelData(0);
+  const right = rendered.getChannelData(1);
+  const len = left.length;
+
+  const toInt16 = (f) => Math.max(-32768, Math.min(32767, f < 0 ? f * 0x8000 : f * 0x7FFF));
+
+  const encoder = new lame.Mp3Encoder(2, sampleRate, 128);
+  const chunkSize = 1152;
+  const mp3Data = [];
+  const leftBuf = new Int16Array(chunkSize);
+  const rightBuf = new Int16Array(chunkSize);
+
+  for (let i = 0; i < len; i += chunkSize) {
+    const count = Math.min(chunkSize, len - i);
+    for (let j = 0; j < count; j++) {
+      leftBuf[j] = toInt16(left[i + j]);
+      rightBuf[j] = toInt16(right[i + j]);
+    }
+    const chunk = encoder.encodeBuffer(leftBuf.subarray(0, count), rightBuf.subarray(0, count));
+    if (chunk.length > 0) mp3Data.push(chunk);
+  }
+  const tail = encoder.flush();
+  if (tail.length > 0) mp3Data.push(tail);
+
+  const blob = new Blob(mp3Data, { type: 'audio/mpeg' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (app.activePreset || 'se') + '.mp3';
+  a.click();
+}
+
 export async function exportOGG() {
   // NOTE:
   // Browsers can encode OGG (usually Opus) via MediaRecorder.

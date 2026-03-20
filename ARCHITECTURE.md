@@ -23,6 +23,7 @@
 | `se-json-manager.js` | プリセット保存/読込（JSON / IndexedDB） | ~160 |
 | `se-temp-board.js` | Temp Board（カード一覧 + drag&drop） | ~250 |
 | `se-db.js` | IndexedDB ラッパー（session / userPresets / tempBoard） | ~130 |
+| `se-ai-generator.js` | AI SE ジェネレータ（LLM API → Web Audio パラメータ生成） | ~230 |
 
 **配布:** 本番は **HTTPS 上の静的ホスト** を想定（一般公開向け）。`file://` 直開きは ES modules の都合で不安定になり得る — ローカル確認は `npx serve` 等。
 

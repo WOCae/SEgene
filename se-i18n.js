@@ -86,6 +86,7 @@ const STRINGS = {
     'toast.oggNoMimeType': 'OGG出力: 対応する mimeType が見つかりません',
     'toast.oggInitFailed': 'OGG出力: MediaRecorder初期化に失敗しました',
     'toast.oggEmpty': 'OGG出力: 録音データが空でした',
+    'toast.mp3NoLame': 'MP3出力: lamejs が読み込まれていません',
 
     // Dynamic HTML strings
     'cmp.slot': 'スロット {0}',
@@ -198,6 +199,7 @@ const STRINGS = {
     'toast.oggNoMimeType': 'OGG: No supported mimeType found',
     'toast.oggInitFailed': 'OGG: MediaRecorder initialization failed',
     'toast.oggEmpty': 'OGG: Recording data was empty',
+    'toast.mp3NoLame': 'MP3: lamejs not loaded',
 
     // Dynamic HTML strings
     'cmp.slot': 'Slot {0}',

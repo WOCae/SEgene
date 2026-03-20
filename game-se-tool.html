@@ -14,6 +14,7 @@
   <h1>GAME SE TOOL</h1>
   <span class="badge">Web Audio API</span>
   <span class="badge">v1.2</span>
+  <button class="badge ai-gen-badge" onclick="openAiGenerator()" style="cursor:pointer">✦ AI 生成</button>
   <button class="badge" onclick="openManager()" style="cursor:pointer;background:rgba(108,99,255,.15);border-color:rgba(108,99,255,.4);color:var(--accent2)">⊞ PRESET MANAGER</button>
   <button class="badge" onclick="openCompare()" style="cursor:pointer;background:rgba(64,196,170,.12);border-color:rgba(64,196,170,.4);color:var(--teal)" data-i18n="header.compare">⊟ SE 比較</button>
   <button class="badge" onclick="openHelp()" style="cursor:pointer;background:rgba(255,183,77,.08);border-color:rgba(255,183,77,.28);color:var(--amber)">? HELP</button>
@@ -67,6 +68,111 @@
   </div>
 </div>
 
+<!-- Library Modal -->
+<div class="modal-overlay" id="libraryModalOverlay" onclick="if(event.target===this)closeLibraryModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">LIBRARY MANAGER</span>
+      <button class="modal-close" onclick="closeLibraryModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-divider">Selection</div>
+      <div class="library-select-row">
+        <label class="library-label">Game</label>
+        <select id="libraryGameSelect"></select>
+      </div>
+      <div id="libraryGameActions" class="library-actions-block">
+        <button class="btn-sm" style="font-size:11px" onclick="copyUserGame()">⎘ Copy Game</button>
+        <button class="btn-sm del" style="font-size:11px" onclick="deleteUserGame()">✕ Delete Game</button>
+        <button class="btn-sm" style="font-size:11px" onclick="renameUserGame()">✎ Rename Game</button>
+      </div>
+      <div class="library-select-row">
+        <label class="library-label">Subtab</label>
+        <select id="librarySubTabSelect"></select>
+      </div>
+      <div id="librarySubTabActions" class="library-actions-block">
+        <button class="btn-sm" style="font-size:11px" onclick="addUserSubTab()">＋ Subtab</button>
+        <button class="btn-sm" style="font-size:11px" onclick="copyUserSubTab()">⎘ Copy Subtab</button>
+        <button class="btn-sm del" style="font-size:11px" onclick="deleteUserSubTab()">✕ Delete Subtab</button>
+        <button class="btn-sm" style="font-size:11px" onclick="renameUserSubTab()">✎ Rename Subtab</button>
+      </div>
+    </div>
+    <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
+      <button class="btn-secondary" style="font-size:11px;width:auto;padding:10px 14px" onclick="applyLibraryModalSelection()">選択</button>
+      <button class="btn-secondary" style="font-size:11px;width:auto;padding:10px 14px" onclick="openManager()">Items（JSON/Save）</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI SE Generator Modal -->
+<div class="modal-overlay" id="aiGenOverlay" onclick="if(event.target===this)closeAiGenerator()">
+  <div class="modal ai-gen-modal">
+    <div class="modal-header">
+      <span class="modal-title">✦ AI SE GENERATOR</span>
+      <button class="modal-close" onclick="closeAiGenerator()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- API Settings -->
+      <details class="ai-settings-block">
+        <summary class="ai-settings-summary">⚙ API 設定</summary>
+        <div class="ai-settings-grid">
+          <label class="ai-settings-label">Provider</label>
+          <select id="aiGenProvider" class="ai-select" onchange="aiGenOnProviderChange()">
+            <option value="google">Google AI Studio (Gemini) ★無料</option>
+            <option value="groq">Groq ★無料</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openrouter">OpenRouter</option>
+          </select>
+          <label class="ai-settings-label">API Key</label>
+          <input id="aiGenApiKey" type="password" class="ai-input" placeholder="APIキー">
+          <label class="ai-settings-label">Model</label>
+          <div>
+            <div class="ai-model-row">
+              <select id="aiGenModel" class="ai-select" style="flex:1" onchange="aiGenOnModelSelectChange()"></select>
+              <button class="ai-refresh-btn" onclick="aiGenRefreshModels()" title="最新モデル一覧を取得">↻</button>
+            </div>
+            <input id="aiGenModelCustom" type="text" class="ai-input ai-model-custom-input"
+              placeholder="モデルIDを直接入力（例: gemini-2.5-flash）" style="display:none">
+            <span id="aiGenModelStatus" class="ai-model-status"></span>
+          </div>
+        </div>
+        <p class="ai-settings-note">APIキーはブラウザの localStorage に保存されます（サーバーには送信しません）。</p>
+      </details>
+
+      <!-- Prompt -->
+      <div style="margin-top:12px">
+        <textarea id="aiGenPrompt" class="ai-textarea" rows="3"
+          placeholder="勇者がレベルアップする明るい8bit音"></textarea>
+        <div class="ai-prompt-label">作りたいSEを自然言語で説明してください</div>
+      </div>
+
+      <!-- Examples -->
+      <div class="ai-examples-label">例文</div>
+      <div id="aiGenExamples" class="ai-examples"></div>
+
+      <!-- Generate button -->
+      <button id="aiGenBtn" class="ai-gen-btn" onclick="aiGenGenerate()">✦ 生成する</button>
+
+      <!-- Status -->
+      <div id="aiGenStatus" class="ai-status"></div>
+
+      <!-- Result card -->
+      <div id="aiGenResult" class="ai-result" style="display:none">
+        <div id="aiGenResultName" class="ai-result-name"></div>
+        <div id="aiGenResultDesc" class="ai-result-desc"></div>
+        <div id="aiGenResultTags" class="ai-result-tags"></div>
+        <div class="ai-result-actions">
+          <button class="ai-preview-btn" onclick="aiGenPreview()">▶ プレビュー</button>
+          <button class="ai-apply-btn" onclick="aiGenApply()">✓ エディタに適用</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -89,13 +195,10 @@
 <div class="layout" id="appLayout" data-mobile-tab="presets">
   <!-- Presets Sidebar -->
   <div class="sidebar">
-    <div class="sidebar-header">PRESETS</div>
-    <div class="cat-tabs">
-      <button class="cat-tab active-8bit" onclick="setCategory('8bit',this)">8BIT</button>
-      <button class="cat-tab" onclick="setCategory('real',this)">REAL</button>
-      <button class="cat-tab" onclick="setCategory('ui',this)">UI</button>
-      <button class="cat-tab" onclick="setCategory('env',this)">ENV</button>
-    </div>
+    <div class="sidebar-header">LIBRARY</div>
+    <div id="libraryActions" class="library-actions"></div>
+    <div class="cat-tabs" id="gameTabs"></div>
+    <div class="cat-tabs" id="subTabs"></div>
     <div class="preset-list" id="presetList"></div>
   </div>
 
@@ -341,6 +444,7 @@
       <div class="panel-section-title">EXPORT</div>
       <button class="btn-export" onclick="exportWAV()">⬇ EXPORT WAV</button>
       <button class="btn-export" onclick="exportOGG()" style="margin-top:8px;">⬇ EXPORT OGG</button>
+      <button class="btn-export" onclick="exportMP3()" style="margin-top:8px;">⬇ EXPORT MP3</button>
     </div>
 
     <div>
@@ -431,6 +535,7 @@
 </div>
 <div class="mobile-sheet-backdrop" id="mobileSheetBackdrop"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
 <script type="module" src="game-se-tool-entry.js"></script>
 </body>
 </html>
