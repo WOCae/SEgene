@@ -74,9 +74,17 @@
   .layout {
     --left-panel-w: 260px;
     --right-panel-w: 280px;
+    --left-panel-min-w: 160px;
+    --right-panel-min-w: 180px;
+    --center-panel-min-w: 240px;
     --panel-resizer-w: 8px;
     display: grid;
-    grid-template-columns: var(--left-panel-w) var(--panel-resizer-w) 1fr var(--panel-resizer-w) var(--right-panel-w);
+    grid-template-columns:
+      minmax(var(--left-panel-min-w), var(--left-panel-w))
+      var(--panel-resizer-w)
+      minmax(var(--center-panel-min-w), 1fr)
+      var(--panel-resizer-w)
+      minmax(var(--right-panel-min-w), var(--right-panel-w));
     height: calc(100vh - 53px);
     overflow: hidden;
   }

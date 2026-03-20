@@ -190,12 +190,14 @@ function initPanelResizers() {
 
     if (dragging === 'left') {
       const minLeft = MIN_LEFT;
-      const maxLeft = layoutW - MIN_RIGHT - 2 * resizerW - MIN_CENTER;
+      // 中央（editor）の最小幅を常に確保するため、上限は「開始時の右パネル幅」を使う
+      const maxLeft = layoutW - startRightW - 2 * resizerW - MIN_CENTER;
       const newLeft = clamp(startLeftW + dx, minLeft, maxLeft);
       setVars(newLeft, startRightW);
     } else if (dragging === 'right') {
       const minRight = MIN_RIGHT;
-      const maxRight = layoutW - MIN_LEFT - 2 * resizerW - MIN_CENTER;
+      // 中央（editor）の最小幅を常に確保するため、上限は「開始時の左パネル幅」を使う
+      const maxRight = layoutW - startLeftW - 2 * resizerW - MIN_CENTER;
       const newRight = clamp(startRightW - dx, minRight, maxRight);
       setVars(startLeftW, newRight);
     }
