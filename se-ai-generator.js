@@ -5,6 +5,15 @@ import { applyStateToUI } from './se-editor-ui.js';
 import { playSE } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
 
+// ── プロキシ設定 ───────────────────────────────────────────────────────────────
+// 自前 PHP サーバーを使う場合は絶対 URL に変更する（末尾スラッシュなし）
+// 例: 'https://yourserver.com/api'
+// HF Spaces や同一オリジンの場合は '' のまま（相対パスを使用）
+const PROXY_BASE = 'https://backyard.enginfo.jp/wp-content/uploads/SE_gene_kye';
+
+const PROXY_GENERATE_URL       = PROXY_BASE ? `${PROXY_BASE}/api-generate.php`       : '/api/generate';
+const PROXY_AVAILABLE_URL      = PROXY_BASE ? `${PROXY_BASE}/api-proxy-available.php` : '/api/proxy-available';
+
 // ── サーバープロキシ状態 ───────────────────────────────────────────────────────
 // null=未確認 / true=利用可能 / false=利用不可
 let _proxyAvailable = null;
@@ -398,7 +407,7 @@ async function _checkProxy() {
   const MAX_RETRY = 12;
   for (let i = 0; i <= MAX_RETRY; i++) {
     try {
-      const res = await fetch('/api/proxy-available',
+      const res = await fetch(PROXY_AVAILABLE_URL,
         { signal: AbortSignal.timeout(8000) });
       if (res.ok && (await res.json()).available === true) {
         _proxyAvailable = true;
@@ -444,7 +453,7 @@ function _updateKeyPlaceholder(provider, currentValue) {
 async function _callProxy(model, description) {
   let res;
   try {
-    res = await fetch('/api/generate', {
+    res = await fetch(PROXY_GENERATE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
