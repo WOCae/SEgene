@@ -597,6 +597,4 @@ export { audioCtx, analyser, masterGain };
 // PSEQ / ARP / Compare / TempBoard が呼ぶ「単発SE再生」
 export { playSEOnCtx };
 
-// 音声再生後に波形ループを再開するため外部から呼び出す
-export { startWaveform };
 
