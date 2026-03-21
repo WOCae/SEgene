@@ -323,6 +323,75 @@ export async function exportOGG() {
   a.click();
 }
 
+export async function renderParamsToWAV(params) {
+  initAudio();
+  const dur = params.duration / 1000 + params.release / 1000 + 0.3;
+  const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+  playSEOnCtx(offCtx, offCtx.destination, params);
+  const rendered = await offCtx.startRendering();
+  return encodeWAV(rendered);
+}
+
+export async function renderParamsToMP3(params) {
+  initAudio();
+  const lame = window.lamejs;
+  if (!lame) return null;
+  const dur = params.duration / 1000 + params.release / 1000 + 0.3;
+  const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+  playSEOnCtx(offCtx, offCtx.destination, params);
+  const rendered = await offCtx.startRendering();
+  const sampleRate = rendered.sampleRate;
+  const left = rendered.getChannelData(0);
+  const right = rendered.getChannelData(1);
+  const len = left.length;
+  const toInt16 = (f) => Math.max(-32768, Math.min(32767, f < 0 ? f * 0x8000 : f * 0x7FFF));
+  const encoder = new lame.Mp3Encoder(2, sampleRate, 128);
+  const chunkSize = 1152;
+  const mp3Data = [];
+  const lBuf = new Int16Array(chunkSize);
+  const rBuf = new Int16Array(chunkSize);
+  for (let i = 0; i < len; i += chunkSize) {
+    const count = Math.min(chunkSize, len - i);
+    for (let j = 0; j < count; j++) { lBuf[j] = toInt16(left[i+j]); rBuf[j] = toInt16(right[i+j]); }
+    const chunk = encoder.encodeBuffer(lBuf.subarray(0, count), rBuf.subarray(0, count));
+    if (chunk.length > 0) mp3Data.push(chunk);
+  }
+  const tail = encoder.flush();
+  if (tail.length > 0) mp3Data.push(tail);
+  const out = new Uint8Array(mp3Data.reduce((s, c) => s + c.length, 0));
+  let off = 0; for (const c of mp3Data) { out.set(c, off); off += c.length; }
+  return out;
+}
+
+export async function renderParamsToOGG(params) {
+  initAudio();
+  const AudioRec = window.MediaRecorder;
+  if (!AudioRec) return null;
+  const candidates = ['audio/ogg;codecs=opus', 'audio/ogg; codecs=opus', 'audio/ogg'];
+  let mimeType = null;
+  for (const mt of candidates) {
+    try { if (AudioRec.isTypeSupported?.(mt)) { mimeType = mt; break; } } catch {}
+  }
+  if (!mimeType) return null;
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  const recDest = audioCtx.createMediaStreamDestination();
+  const gain = audioCtx.createGain();
+  gain.gain.value = 1;
+  gain.connect(recDest);
+  let recorder;
+  const chunks = [];
+  try { recorder = new AudioRec(recDest.stream, { mimeType }); } catch { gain.disconnect(); return null; }
+  recorder.ondataavailable = (ev) => { if (ev.data?.size > 0) chunks.push(ev.data); };
+  const done = new Promise((res) => { recorder.onstop = () => res(); });
+  recorder.start();
+  const { dur } = playSEOnCtx(audioCtx, gain, params);
+  window.setTimeout(() => { try { recorder.stop(); } catch {} }, Math.ceil(dur * 1000 + 250));
+  await done;
+  gain.disconnect();
+  if (!chunks.length) return null;
+  return new Blob(chunks, { type: mimeType });
+}
+
 function encodeWAV(buffer) {
   const numCh = buffer.numberOfChannels;
   const sr = buffer.sampleRate;

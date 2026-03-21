@@ -4,6 +4,7 @@ import { state } from './se-state.js';
 import { applyStateToUI } from './se-editor-ui.js';
 import { playSE } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
+import { t, getLang } from './se-i18n.js';
 
 // ── プロキシ設定 ───────────────────────────────────────────────────────────────
 // 自前 PHP サーバーを使う場合は絶対 URL に変更する（末尾スラッシュなし）
@@ -86,18 +87,32 @@ const PROVIDER_CONFIG = {
 };
 
 // ── Example prompts ───────────────────────────────────────────────────────────
-const EXAMPLES = [
-  '勇者がレベルアップする明るい8bit音',
-  '敵を倒したときの爽快な斬撃音',
-  'SF系レーザー銃の発射音',
-  'コインを取得するキラキラした音',
-  '魔法を詠唱する神秘的な音',
-  'ゲームオーバーの悲しい音',
-  '宝箱を開けるわくわくする音',
-  '爆発の重厚な効果音',
-  'メニュー選択のポップな音',
-  '水中に潜るときのぼわっとした音',
-];
+const EXAMPLES = {
+  ja: [
+    '勇者がレベルアップする明るい8bit音',
+    '敵を倒したときの爽快な斬撃音',
+    'SF系レーザー銃の発射音',
+    'コインを取得するキラキラした音',
+    '魔法を詠唱する神秘的な音',
+    'ゲームオーバーの悲しい音',
+    '宝箱を開けるわくわくする音',
+    '爆発の重厚な効果音',
+    'メニュー選択のポップな音',
+    '水中に潜るときのぼわっとした音',
+  ],
+  en: [
+    'A bright 8-bit sound for leveling up',
+    'A satisfying slash when defeating an enemy',
+    'A sci-fi laser gun firing sound',
+    'A sparkling coin pickup sound',
+    'A mysterious sound for casting magic',
+    'A sad game over jingle',
+    'An exciting treasure chest opening sound',
+    'A heavy explosion effect',
+    'A poppy menu selection sound',
+    'A muffled splash for diving underwater',
+  ],
+};
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are an expert sound designer specializing in game sound effects (SE) using Web Audio API synthesis.
@@ -237,14 +252,14 @@ export function aiGenSetExample(text) {
 export async function aiGenGenerate() {
   const desc = document.getElementById('aiGenPrompt').value.trim();
   if (!desc) {
-    _setStatus('説明を入力してください', true);
+    _setStatus(t('aiGen.noDesc'), true);
     document.getElementById('aiGenPrompt').focus();
     return;
   }
 
   _saveSettings();
   _showResult(null);
-  _setStatus('生成中…');
+  _setStatus(t('aiGen.generating'));
 
   const btn = document.getElementById('aiGenBtn');
   btn.disabled = true;
@@ -253,9 +268,9 @@ export async function aiGenGenerate() {
     const raw    = await _callApi(desc);
     const result = _parseResult(raw);
     _showResult(result);
-    _setStatus('生成完了！プレビューして適用してください');
+    _setStatus(t('aiGen.genComplete'));
   } catch (e) {
-    _setStatus(`エラー: ${e.message}`, true);
+    _setStatus(t('aiGen.error', e.message), true);
   } finally {
     btn.disabled = false;
   }
@@ -271,21 +286,28 @@ export function aiGenApply() {
   if (!_lastResult) return;
   _applyToState(_lastResult);
   closeAiGenerator();
-  showToast(`「${_lastResult.name || _lastResult.nameEn}」をエディタに適用しました`);
+  showToast(t('aiGen.applied', _lastResult.name || _lastResult.nameEn));
 }
 
 // ── Init: render example chips ─────────────────────────────────────────────
 export function initAiGenerator() {
   const container = document.getElementById('aiGenExamples');
   if (!container) return;
-  container.innerHTML = EXAMPLES.map(ex =>
-    `<button class="ai-example-chip" data-ex="${ex.replace(/"/g, '&quot;')}">${ex}</button>`
-  ).join('');
+  _renderExamples(container);
   // Use event delegation to avoid inline onclick with quoted strings
   container.addEventListener('click', e => {
     const chip = e.target.closest('.ai-example-chip');
     if (chip) aiGenSetExample(chip.dataset.ex);
   });
+  // Re-render examples when language changes
+  document.addEventListener('se:langchange', () => _renderExamples(container));
+}
+
+function _renderExamples(container) {
+  const list = EXAMPLES[getLang()] ?? EXAMPLES.ja;
+  container.innerHTML = list.map(ex =>
+    `<button class="ai-example-chip" data-ex="${ex.replace(/"/g, '&quot;')}">${ex}</button>`
+  ).join('');
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -307,7 +329,7 @@ function _populateModelSelect(provider, models) {
     .map(m => `<option value="${m.id}"${m.id === savedModel ? ' selected' : ''}>${m.label}</option>`)
     .join('');
   // 末尾に手動入力オプションを追加
-  sel.innerHTML += `<option value="_custom"${!inList && savedModel ? ' selected' : ''}>— カスタム入力 —</option>`;
+  sel.innerHTML += `<option value="_custom"${!inList && savedModel ? ' selected' : ''}>${t('aiGen.customOption')}</option>`;
 
   if (!inList && savedModel) {
     // 保存済みが一覧にない → カスタム選択状態でテキスト欄を表示

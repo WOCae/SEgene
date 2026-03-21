@@ -1,5 +1,4 @@
 import {
-  renderPresets,
   loadPreset,
   setCategory,
   setWave,
@@ -29,12 +28,15 @@ import {
   openManager,
   closeManager,
   saveCurrentPreset,
+  saveParamsToLibrary,
   exportAllJSON,
-  exportSingleJSON,
   importJSON,
   loadUserPreset,
   deleteUserPreset,
-  renameItemInActiveSubTab
+  renameItemInActiveSubTab,
+  renameUserItem,
+  exportSubTabZip,
+  exportGameZip
 } from './se-json-manager.js';
 import { openCompare, closeCompare, cmpPlayAll, cmpPlaySequential, cmpAddSlot, cmpPlaySlot, cmpCaptureSlot, cmpLoadToEditor, cmpDeleteSlot } from './se-compare.js';
 import { ARP, arpBpmChange, arpDivChange, arpStepsChange, arpStart, arpStop, arpRebuildNotes, arpPattern, initArp } from './se-arp.js';
@@ -122,6 +124,7 @@ Object.assign(window, {
   closeHelp,
   toggleLang,
   saveCurrentPreset,
+  saveParamsToLibrary,
   exportAllJSON,
   importJSON,
   setCategory,
@@ -176,7 +179,6 @@ Object.assign(window, {
   cmpDeleteSlot,
   loadPreset,
   loadUserPreset,
-  exportSingleJSON,
   deleteUserPreset,
   tbPlay,
   tbLoadToEditor,
@@ -187,6 +189,9 @@ Object.assign(window, {
   tbDrop,
   tbRenameCard,
   renameItemInActiveSubTab,
+  renameUserItem,
+  exportSubTabZip,
+  exportGameZip,
   openLibraryModal,
   closeLibraryModal,
   applyLibraryModalSelection,
@@ -579,5 +584,27 @@ async function restoreSessionData(session) {
 
   // 復元完了後にセッションセーバーを登録（復元中の誤保存を防ぐ）
   setSessionSaver(() => dbSaveSession(collectSession()));
+
+  // Temp Board → Library drag & drop
+  const presetList = document.getElementById('presetList');
+  if (presetList) {
+    presetList.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer.types.includes('application/x-tbcard')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      presetList.classList.add('tb-drop-target');
+    });
+    presetList.addEventListener('dragleave', (ev) => {
+      if (!presetList.contains(ev.relatedTarget)) presetList.classList.remove('tb-drop-target');
+    });
+    presetList.addEventListener('drop', async (e) => {
+      presetList.classList.remove('tb-drop-target');
+      const raw = e.dataTransfer.getData('application/x-tbcard');
+      if (!raw) return;
+      e.preventDefault();
+      const { name, params } = JSON.parse(raw);
+      await saveParamsToLibrary(name, params);
+    });
+  }
 })();
 

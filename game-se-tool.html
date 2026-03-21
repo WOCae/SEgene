@@ -14,8 +14,7 @@
   <h1>GAME SE TOOL</h1>
   <span class="badge">Web Audio API</span>
   <span class="badge">v1.2</span>
-  <button class="badge ai-gen-badge" onclick="openAiGenerator()" style="cursor:pointer">✦ AI 生成</button>
-  <button class="badge" onclick="openManager()" style="cursor:pointer;background:rgba(108,99,255,.15);border-color:rgba(108,99,255,.4);color:var(--accent2)">⊞ PRESET MANAGER</button>
+  <button class="badge ai-gen-badge" onclick="openAiGenerator()" style="cursor:pointer" data-i18n="aiGen.badge">✦ AI 生成</button>
   <button class="badge" onclick="openCompare()" style="cursor:pointer;background:rgba(64,196,170,.12);border-color:rgba(64,196,170,.4);color:var(--teal)" data-i18n="header.compare">⊟ SE 比較</button>
   <button class="badge" onclick="openHelp()" style="cursor:pointer;background:rgba(255,183,77,.08);border-color:rgba(255,183,77,.28);color:var(--amber)">? HELP</button>
   <button class="badge" id="langToggleBtn" onclick="toggleLang()" style="cursor:pointer;background:rgba(150,150,150,.1);border-color:rgba(150,150,150,.3);color:var(--text2);font-weight:bold">EN</button>
@@ -42,32 +41,6 @@
   </div>
 </div>
 
-<!-- Preset Manager Modal -->
-<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeManager()">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">PRESET MANAGER</span>
-      <button class="modal-close" onclick="closeManager()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="section-divider" data-i18n="preset.saveTitle">現在の設定を保存</div>
-      <div class="save-form">
-        <input type="text" id="savePresetName" data-i18n-placeholder="preset.namePlaceholder" placeholder="プリセット名を入力…" maxlength="40">
-        <button class="btn-secondary" style="width:auto;padding:9px 14px;font-size:11px" onclick="saveCurrentPreset()" data-i18n="preset.saveBtn">保存</button>
-      </div>
-      <div class="section-divider" data-i18n="preset.savedTitle">保存済みプリセット</div>
-      <div id="savedPresetList"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-secondary" style="font-size:11px" onclick="exportAllJSON()" data-i18n="preset.exportAll">⬇ 全てエクスポート (.json)</button>
-      <label class="btn-secondary" style="font-size:11px;cursor:pointer;width:auto;padding:10px 14px;display:flex;align-items:center;gap:6px">
-        <span data-i18n="preset.import">⬆ インポート (.json)</span>
-        <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
-      </label>
-    </div>
-  </div>
-</div>
-
 <!-- Library Modal -->
 <div class="modal-overlay" id="libraryModalOverlay" onclick="if(event.target===this)closeLibraryModal()">
   <div class="modal">
@@ -76,6 +49,13 @@
       <button class="modal-close" onclick="closeLibraryModal()">✕</button>
     </div>
     <div class="modal-body">
+      <div class="library-json-row">
+        <button class="btn-secondary" style="font-size:11px;flex:1" onclick="exportAllJSON()" data-i18n="preset.exportAll">⬇ エクスポート (.json)</button>
+        <label class="btn-secondary" style="font-size:11px;cursor:pointer;flex:1;display:flex;align-items:center;justify-content:center;gap:6px">
+          <span data-i18n="preset.import">⬆ インポート (.json)</span>
+          <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
+        </label>
+      </div>
       <div class="section-divider">Selection</div>
       <div class="library-select-row">
         <label class="library-label">Game</label>
@@ -85,21 +65,26 @@
         <button class="btn-sm" style="font-size:11px" onclick="copyUserGame()">⎘ Copy Game</button>
         <button class="btn-sm del" style="font-size:11px" onclick="deleteUserGame()">✕ Delete Game</button>
         <button class="btn-sm" style="font-size:11px" onclick="renameUserGame()">✎ Rename Game</button>
+        <div class="library-actions-block-row">
+          <button class="btn-sm" style="font-size:11px" onclick="exportGameZip('wav')">⬇ WAV ZIP</button>
+          <button class="btn-sm" style="font-size:11px" onclick="exportGameZip('ogg')">⬇ OGG ZIP</button>
+          <button class="btn-sm" style="font-size:11px" onclick="exportGameZip('mp3')">⬇ MP3 ZIP</button>
+        </div>
       </div>
       <div class="library-select-row">
         <label class="library-label">Subtab</label>
         <select id="librarySubTabSelect"></select>
       </div>
       <div id="librarySubTabActions" class="library-actions-block">
-        <button class="btn-sm" style="font-size:11px" onclick="addUserSubTab()">＋ Subtab</button>
         <button class="btn-sm" style="font-size:11px" onclick="copyUserSubTab()">⎘ Copy Subtab</button>
         <button class="btn-sm del" style="font-size:11px" onclick="deleteUserSubTab()">✕ Delete Subtab</button>
         <button class="btn-sm" style="font-size:11px" onclick="renameUserSubTab()">✎ Rename Subtab</button>
+        <div class="library-actions-block-row">
+          <button class="btn-sm" style="font-size:11px" onclick="exportSubTabZip('wav')">⬇ WAV ZIP</button>
+          <button class="btn-sm" style="font-size:11px" onclick="exportSubTabZip('ogg')">⬇ OGG ZIP</button>
+          <button class="btn-sm" style="font-size:11px" onclick="exportSubTabZip('mp3')">⬇ MP3 ZIP</button>
+        </div>
       </div>
-    </div>
-    <div class="modal-footer" style="gap:8px;flex-wrap:wrap">
-      <button class="btn-secondary" style="font-size:11px;width:auto;padding:10px 14px" onclick="applyLibraryModalSelection()">選択</button>
-      <button class="btn-secondary" style="font-size:11px;width:auto;padding:10px 14px" onclick="openManager()">Items（JSON/Save）</button>
     </div>
   </div>
 </div>
@@ -115,7 +100,7 @@
 
       <!-- API Settings -->
       <details class="ai-settings-block">
-        <summary class="ai-settings-summary">⚙ API 設定</summary>
+        <summary class="ai-settings-summary" data-i18n="aiGen.apiSettings">⚙ API 設定</summary>
         <div class="ai-settings-grid">
           <label class="ai-settings-label">Provider</label>
           <select id="aiGenProvider" class="ai-select" onchange="aiGenOnProviderChange()">
@@ -126,34 +111,34 @@
             <option value="openrouter">OpenRouter</option>
           </select>
           <label class="ai-settings-label">API Key</label>
-          <input id="aiGenApiKey" type="password" class="ai-input" placeholder="APIキー">
+          <input id="aiGenApiKey" type="password" class="ai-input" placeholder="APIキー" data-i18n-placeholder="aiGen.apiKeyPlaceholder">
           <label class="ai-settings-label">Model</label>
           <div>
             <div class="ai-model-row">
               <select id="aiGenModel" class="ai-select" style="flex:1" onchange="aiGenOnModelSelectChange()"></select>
-              <button class="ai-refresh-btn" onclick="aiGenRefreshModels()" title="最新モデル一覧を取得">↻</button>
+              <button class="ai-refresh-btn" onclick="aiGenRefreshModels()" data-i18n-title="aiGen.refreshTitle" title="最新モデル一覧を取得">↻</button>
             </div>
             <input id="aiGenModelCustom" type="text" class="ai-input ai-model-custom-input"
-              placeholder="モデルIDを直接入力（例: gemini-2.5-flash）" style="display:none">
+              placeholder="モデルIDを直接入力（例: gemini-2.5-flash）" data-i18n-placeholder="aiGen.modelCustomPlaceholder" style="display:none">
             <span id="aiGenModelStatus" class="ai-model-status"></span>
           </div>
         </div>
-        <p class="ai-settings-note">APIキーはブラウザの localStorage に保存されます（サーバーには送信しません）。</p>
+        <p class="ai-settings-note" data-i18n="aiGen.settingsNote">APIキーはブラウザの localStorage に保存されます（サーバーには送信しません）。</p>
       </details>
 
       <!-- Prompt -->
       <div style="margin-top:12px">
         <textarea id="aiGenPrompt" class="ai-textarea" rows="3"
-          placeholder="勇者がレベルアップする明るい8bit音"></textarea>
-        <div class="ai-prompt-label">作りたいSEを自然言語で説明してください</div>
+          placeholder="勇者がレベルアップする明るい8bit音" data-i18n-placeholder="aiGen.promptPlaceholder"></textarea>
+        <div class="ai-prompt-label" data-i18n="aiGen.promptLabel">作りたいSEを自然言語で説明してください</div>
       </div>
 
       <!-- Examples -->
-      <div class="ai-examples-label">例文</div>
+      <div class="ai-examples-label" data-i18n="aiGen.examplesLabel">例文</div>
       <div id="aiGenExamples" class="ai-examples"></div>
 
       <!-- Generate button -->
-      <button id="aiGenBtn" class="ai-gen-btn" onclick="aiGenGenerate()">✦ 生成する</button>
+      <button id="aiGenBtn" class="ai-gen-btn" onclick="aiGenGenerate()" data-i18n="aiGen.generateBtn">✦ 生成する</button>
 
       <!-- Status -->
       <div id="aiGenStatus" class="ai-status"></div>
@@ -164,8 +149,8 @@
         <div id="aiGenResultDesc" class="ai-result-desc"></div>
         <div id="aiGenResultTags" class="ai-result-tags"></div>
         <div class="ai-result-actions">
-          <button class="ai-preview-btn" onclick="aiGenPreview()">▶ プレビュー</button>
-          <button class="ai-apply-btn" onclick="aiGenApply()">✓ エディタに適用</button>
+          <button class="ai-preview-btn" onclick="aiGenPreview()" data-i18n="aiGen.previewBtn">▶ プレビュー</button>
+          <button class="ai-apply-btn" onclick="aiGenApply()" data-i18n="aiGen.applyBtn">✓ エディタに適用</button>
         </div>
       </div>
 
@@ -441,6 +426,11 @@
     </div>
 
     <div>
+      <div class="panel-section-title">LIBRARY</div>
+      <button class="btn-export" style="background:rgba(108,99,255,.18);border-color:rgba(108,99,255,.5);color:var(--accent2)" onclick="saveCurrentPreset()" data-i18n="library.addBtn">＋ ライブラリに追加</button>
+    </div>
+
+    <div>
       <div class="panel-section-title">EXPORT</div>
       <button class="btn-export" onclick="exportWAV()">⬇ EXPORT WAV</button>
       <button class="btn-export" onclick="exportOGG()" style="margin-top:8px;">⬇ EXPORT OGG</button>
@@ -536,6 +526,7 @@
 <div class="mobile-sheet-backdrop" id="mobileSheetBackdrop"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script type="module" src="game-se-tool-entry.js"></script>
 </body>
 </html>

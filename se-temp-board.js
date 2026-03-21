@@ -99,7 +99,9 @@ export function tbRenameCard(id, newName) {
 // Drag & Drop
 export function tbDragStart(id, e) {
   tbDragId = id;
-  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.effectAllowed = 'copyMove';
+  const card = tbCards.find(c => c.id === id);
+  if (card) e.dataTransfer.setData('application/x-tbcard', JSON.stringify({ name: card.name, params: card.params }));
   setTimeout(() => {
     const el = document.getElementById(`tb-card-${id}`);
     if (el) el.classList.add('dragging');

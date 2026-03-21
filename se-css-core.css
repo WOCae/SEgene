@@ -337,6 +337,21 @@
     color: var(--accent2);
   }
 
+  /* subtab add tab button (right side of the subtab row) */
+  .cat-tab.library-add-subtab-tab {
+    flex: 0 0 auto;
+    width: 76px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--accent2);
+    border-bottom-color: transparent;
+    border-left: 1px solid var(--border);
+  }
+  .cat-tab.library-add-subtab-tab:hover {
+    background: rgba(108,99,255,.12);
+    color: var(--accent2);
+  }
+
   /* DnD reorder */
   .cat-tab.is-dnd-over {
     border-bottom-color: var(--accent) !important;
@@ -348,6 +363,11 @@
   }
 
   .preset-list::-webkit-scrollbar { width: 4px; }
+  .preset-list.tb-drop-target {
+    outline: 2px dashed var(--accent);
+    outline-offset: -3px;
+    background: rgba(108,99,255,.06);
+  }
   .preset-list::-webkit-scrollbar-track { background: transparent; }
   .preset-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
   .preset-btn {
@@ -379,9 +399,42 @@
     font-size: 14px;
     flex-shrink: 0;
   }
+  .preset-btn-load {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
   .preset-info { flex: 1; min-width: 0; }
   .preset-name { font-size: 13px; font-weight: 500; }
   .preset-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .preset-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .preset-btn:hover .preset-item-actions { opacity: 1; }
+  .preset-item-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .preset-item-btn:hover { background: var(--bg4); border-color: var(--border2); }
+  .preset-item-btn.del { color: #e05; border-color: rgba(238,0,85,.3); }
+  .preset-item-btn.del:hover { background: rgba(238,0,85,.1); }
 
   /* Center: editor + visualizer (+ arp / pseq below). Single scroll so nothing is clipped off-screen. */
   .center {
@@ -601,12 +654,26 @@
     outline: none;
   }
 
+  .library-json-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
   .library-actions-block {
     padding: 0 0 12px;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 10px;
+  }
+  .library-actions-block-row {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+    margin-top: 2px;
   }
   .btn-secondary:hover { border-color: var(--border2); background: var(--bg4); }
   .btn-export {

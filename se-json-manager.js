@@ -3,73 +3,75 @@ import { showToast } from './se-toast.js';
 import { updateParam, syncVolumeSlider, renderPresets } from './se-editor-ui.js';
 import {
   dbGetUserGame,
+  dbCreateUserGame,
+  dbCreateUserSubTab,
   dbAddItemToSubTab,
   dbDeleteItemFromSubTab,
   dbRenameItemInSubTab
 } from './se-db.js';
 import { t } from './se-i18n.js';
+import { renderParamsToWAV, renderParamsToMP3, renderParamsToOGG } from './se-audio-engine.js';
+
+function _getModalSelection() {
+  const selGame = document.getElementById('libraryGameSelect');
+  const selSub = document.getElementById('librarySubTabSelect');
+  const gameId = (selGame?.value && selGame.value !== '__builtin__') ? selGame.value : null;
+  const subTabId = selSub?.value || null;
+  return { gameId, subTabId };
+}
 
 function _assertActiveUserSubTab() {
+  const { gameId, subTabId } = _getModalSelection();
+  if (gameId && subTabId) return true;
   if (!app.activeUserGameId || !app.activeUserSubTabId) return false;
   return true;
 }
 
 async function _getActiveSubTabItems() {
-  if (!_assertActiveUserSubTab()) return { game: null, subTab: null, items: [] };
-  const game = await dbGetUserGame(app.activeUserGameId);
-  const sid = String(app.activeUserSubTabId);
+  const { gameId, subTabId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  const sId = subTabId ?? app.activeUserSubTabId;
+  if (!gId || !sId) return { game: null, subTab: null, items: [] };
+  const game = await dbGetUserGame(gId);
+  const sid = String(sId);
   const subTab = game?.subtabs?.find(s => String(s.id) === sid) || null;
   const items = subTab?.items || [];
   return { game, subTab, items };
 }
 
-async function renderSavedPresets() {
-  const { items } = await _getActiveSubTabItems();
-  const el = document.getElementById('savedPresetList');
 
-  if (!items.length) {
-    el.innerHTML = `<div class="empty-msg">${t('preset.empty')}</div>`;
+export async function saveParamsToLibrary(name, params) {
+  if (!app.activeUserGameId || !app.activeUserSubTabId) {
+    showToast(t('library.selectGameSubtab'));
     return;
   }
-
-  el.innerHTML = items.slice().reverse().map(p => `
-    <div class="saved-preset-row">
-      <div style="flex:1;min-width:0">
-        <div class="saved-preset-name"
-          contenteditable="true"
-          spellcheck="false"
-          onblur="renameItemInActiveSubTab(${p.id}, this.textContent.trim())"
-        >${p.name}</div>
-        <div class="saved-preset-meta">${p.updatedAt || ''} &nbsp;·&nbsp; ${p.params?.wave ?? ''} / ${p.params?.frequency ?? ''}Hz</div>
-      </div>
-      <button class="btn-sm load" onclick="loadUserPreset(${p.id})">${t('preset.load')}</button>
-      <button class="btn-sm" onclick="exportSingleJSON(${p.id})">⬇</button>
-      <button class="btn-sm del" onclick="deleteUserPreset(${p.id})">${t('preset.delete')}</button>
-    </div>
-  `).join('');
+  await dbAddItemToSubTab(app.activeUserGameId, app.activeUserSubTabId, { name, params });
+  renderPresets();
+  showToast(t('toast.saved', name));
 }
 
 export async function saveCurrentPreset() {
-  if (!_assertActiveUserSubTab()) { showToast('先にユーザーのサブタブを選択してください'); return; }
-  const nameEl = document.getElementById('savePresetName');
-  const name = nameEl.value.trim();
-  if (!name) { showToast(t('toast.nameRequired')); return; }
+  if (!app.activeUserGameId || !app.activeUserSubTabId) {
+    showToast(t('library.selectGameSubtab'));
+    return;
+  }
+  const name = prompt(t('library.addPrompt'))?.trim();
+  if (!name) return;
 
   await dbAddItemToSubTab(app.activeUserGameId, app.activeUserSubTabId, {
     name,
     params: { ...state }
   });
-  nameEl.value = '';
-  await renderSavedPresets();
-  // Sidebar を即時更新（サブタブクリック待ちにしない）
   renderPresets();
   showToast(t('toast.saved', name));
 }
 
 export async function deleteUserPreset(id) {
-  if (!_assertActiveUserSubTab()) return;
-  await dbDeleteItemFromSubTab(app.activeUserGameId, app.activeUserSubTabId, id);
-  await renderSavedPresets();
+  const { gameId, subTabId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  const sId = subTabId ?? app.activeUserSubTabId;
+  if (!gId || !sId) return;
+  await dbDeleteItemFromSubTab(gId, sId, id);
   renderPresets();
   showToast(t('toast.deleted'));
 }
@@ -117,42 +119,34 @@ export async function loadUserPreset(id) {
 }
 
 export async function exportAllJSON() {
-  if (!_assertActiveUserSubTab()) { showToast('サブタブを選択してください'); return; }
-  const { items, subTab, game } = await (async () => {
-    const x = await _getActiveSubTabItems();
-    return { items: x.items, subTab: x.subTab, game: x.game };
-  })();
-  if (!items.length) { showToast(t('toast.noPresets')); return; }
+  const { gameId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  if (!gId) { showToast(t('library.selectGame')); return; }
+  const game = await dbGetUserGame(gId);
+  if (!game) return;
+
+  const totalItems = (game.subtabs || []).reduce((s, st) => s + (st.items || []).length, 0);
+  if (!totalItems) { showToast(t('toast.noPresets')); return; }
 
   const blob = new Blob([JSON.stringify({
     version: 1,
-    type: 'subtab',
-    game: { id: game?.id, name: game?.name },
-    subTab: { id: subTab?.id, name: subTab?.name },
-    items
+    type: 'game',
+    game: {
+      name: game.name,
+      subtabs: (game.subtabs || []).map(st => ({
+        name: st.name,
+        items: (st.items || []).map(({ name, params, updatedAt }) => ({ name, params, updatedAt }))
+      }))
+    }
   }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (subTab?.name || 'subtab').replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
+  a.download = game.name.replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
   a.click();
-  showToast(t('toast.exported', items.length));
-}
-
-export async function exportSingleJSON(id) {
-  if (!_assertActiveUserSubTab()) return;
-  const { items } = await _getActiveSubTabItems();
-  const p = items.find(x => x.id === id);
-  if (!p) return;
-
-  const blob = new Blob([JSON.stringify({ version: 1, type: 'item', item: p }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = p.name.replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
-  a.click();
+  showToast(t('toast.exported', totalItems));
 }
 
 export function importJSON(event) {
-  if (!_assertActiveUserSubTab()) { showToast('サブタブを選択してください'); return; }
   const file = event.target.files[0];
   if (!file) return;
 
@@ -160,27 +154,21 @@ export function importJSON(event) {
   reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      let incomingItems = [];
-      if (data?.type === 'subtab' && Array.isArray(data.items)) incomingItems = data.items;
-      else if (data?.type === 'item' && data.item) incomingItems = [data.item];
-      else if (Array.isArray(data?.presets)) incomingItems = data.presets;
-      else if (Array.isArray(data)) incomingItems = data;
+      if (data?.type !== 'game' || !data.game) throw new Error('not game format');
 
-      if (!incomingItems.length) throw new Error('empty');
-
-      let added = 0;
-      for (const p of incomingItems) {
-        if (!p?.name || !p?.params) continue;
-        await dbAddItemToSubTab(app.activeUserGameId, app.activeUserSubTabId, {
-          name: p.name,
-          params: p.params
-        });
-        added++;
+      const gameName = data.game.name || 'Imported Game';
+      const newGame = await dbCreateUserGame(gameName);
+      let itemCount = 0;
+      for (const st of (data.game.subtabs || [])) {
+        const items = (st.items || []).filter(it => it?.name && it?.params);
+        await dbCreateUserSubTab(newGame.id, st.name || 'Subtab', items);
+        itemCount += items.length;
       }
 
-      await renderSavedPresets();
-      renderPresets();
-      showToast(t('toast.imported', added));
+      app.activeUserGameId = newGame.id;
+      app.activeUserSubTabId = null;
+      await window.refreshLibraryTabs?.();
+      showToast(t('toast.imported', itemCount));
     } catch {
       showToast(t('toast.importFailed'));
     }
@@ -191,38 +179,99 @@ export function importJSON(event) {
 }
 
 export function openManager() {
-  // If Library Modal is open, sync selection from dropdown.
-  const libOverlayOpen = document.getElementById('libraryModalOverlay')?.classList.contains('open');
-  if (libOverlayOpen) {
-    const selGame = document.getElementById('libraryGameSelect');
-    const selSub = document.getElementById('librarySubTabSelect');
-    if (selGame && selSub) {
-      if (selGame.value === '__builtin__') { showToast('Fixed library is read-only'); return; }
-      app.activeUserGameId = selGame.value || null;
-      app.activeUserSubTabId = selSub.value || null;
-    }
-  }
-
-  renderSavedPresets(); // async, fire and forget
-  document.getElementById('modalOverlay').classList.add('open');
-  document.getElementById('savePresetName').focus();
+  window.openLibraryModal?.();
 }
 
 export function closeManager() {
-  document.getElementById('modalOverlay').classList.remove('open');
+  window.closeLibraryModal?.();
 }
 
-// Rename handler (for inline editing)
+// Rename handler
 export async function renameItemInActiveSubTab(id, newName) {
-  if (!_assertActiveUserSubTab()) return;
-  if (!newName) return;
-  await dbRenameItemInSubTab(app.activeUserGameId, app.activeUserSubTabId, id, newName);
-  await renderSavedPresets();
+  const { gameId, subTabId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  const sId = subTabId ?? app.activeUserSubTabId;
+  if (!gId || !sId || !newName) return;
+  await dbRenameItemInSubTab(gId, sId, id, newName);
   renderPresets();
 }
 
-// Re-render list when language changes
-document.addEventListener('se:langchange', () => {
-  if (document.getElementById('modalOverlay')?.classList.contains('open')) renderSavedPresets();
-});
+export async function renameUserItem(id) {
+  const currentName = document.getElementById(`pb-user-${id}`)?.querySelector('.preset-name')?.textContent?.trim() || '';
+  const name = prompt(t('library.renamePrompt'), currentName)?.trim();
+  if (!name) return;
+  await renameItemInActiveSubTab(id, name);
+}
+
+// --- Bulk ZIP export helpers ---
+
+function _safeName(s) {
+  return (s || 'item').replace(/[^\w\u3040-\u9fff\-]/g, '_');
+}
+
+async function _renderItem(format, params) {
+  if (format === 'wav') return { data: await renderParamsToWAV(params), ext: 'wav' };
+  if (format === 'mp3') return { data: await renderParamsToMP3(params), ext: 'mp3' };
+  if (format === 'ogg') return { data: await renderParamsToOGG(params), ext: 'ogg' };
+  return null;
+}
+
+async function _buildAndDownloadZip(zip, zipName) {
+  const JSZip = window.JSZip;
+  if (!JSZip) { showToast(t('library.jszipMissing')); return; }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = zipName;
+  a.click();
+}
+
+export async function exportSubTabZip(format) {
+  const JSZip = window.JSZip;
+  if (!JSZip) { showToast(t('library.jszipMissing')); return; }
+  const { gameId, subTabId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  const sId = subTabId ?? app.activeUserSubTabId;
+  if (!gId || !sId) { showToast(t('library.selectSubtab')); return; }
+  const game = await dbGetUserGame(gId);
+  const subTab = game?.subtabs?.find(s => String(s.id) === String(sId));
+  const items = subTab?.items || [];
+  if (!items.length) { showToast(t('library.noItems')); return; }
+  showToast(t('toast.processing', items.length, format.toUpperCase()));
+  const zip = new JSZip();
+  let count = 0;
+  for (const item of items) {
+    const result = await _renderItem(format, item.params);
+    if (result?.data) { zip.file(`${_safeName(item.name)}.${result.ext}`, result.data); count++; }
+  }
+  if (!count) { showToast(t('library.noItems')); return; }
+  await _buildAndDownloadZip(zip, `${_safeName(subTab.name)}_${format}.zip`);
+  showToast(t('toast.exportedCount', count));
+}
+
+export async function exportGameZip(format) {
+  const JSZip = window.JSZip;
+  if (!JSZip) { showToast(t('library.jszipMissing')); return; }
+  const { gameId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  if (!gId) { showToast(t('library.selectGame')); return; }
+  const game = await dbGetUserGame(gId);
+  if (!game) return;
+  const totalItems = (game.subtabs || []).reduce((s, st) => s + (st.items || []).length, 0);
+  if (!totalItems) { showToast('アイテムがありません'); return; }
+  showToast(t('toast.processing', totalItems, format.toUpperCase()));
+  const zip = new JSZip();
+  let count = 0;
+  for (const st of (game.subtabs || [])) {
+    const folder = zip.folder(_safeName(st.name));
+    for (const item of (st.items || [])) {
+      const result = await _renderItem(format, item.params);
+      if (result?.data) { folder.file(`${_safeName(item.name)}.${result.ext}`, result.data); count++; }
+    }
+  }
+  if (!count) { showToast(t('library.noItems')); return; }
+  await _buildAndDownloadZip(zip, `${_safeName(game.name)}_${format}.zip`);
+  showToast(t('toast.exportedCount', count));
+}
+
 

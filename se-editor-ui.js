@@ -155,6 +155,7 @@ export async function openLibraryModal() {
           const opt = desired ? [...selSub.options].find(o => o.value === String(desired)) : null;
           selSub.value = opt ? desired : (selSub.options[0]?.value || '');
         }
+        document.dispatchEvent(new Event('se:libmodaltabchange'));
       });
       selGame.dataset._subtabListenerAttached = '1';
     }
@@ -168,9 +169,17 @@ export async function openLibraryModal() {
       const opt = desired ? options.find(o => o.value === String(desired)) : null;
       if (opt) selSub.value = desired;
       else if (options.length) selSub.value = options[0]?.value || '';
+
+      if (!selSub.dataset._subtabChangeListenerAttached) {
+        selSub.addEventListener('change', () => {
+          document.dispatchEvent(new Event('se:libmodaltabchange'));
+        });
+        selSub.dataset._subtabChangeListenerAttached = '1';
+      }
     }
 
     overlay.classList.add('open');
+    document.dispatchEvent(new Event('se:libmodaltabchange'));
   } catch (e) {
     console.error('[libraryModal] open failed:', e);
     overlay.classList.add('open'); // best-effort open
@@ -271,6 +280,7 @@ export function setWave(type, btn) {
   document.querySelectorAll('.wave-btn').forEach((b) => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   scheduleSessionSave();
+  if (state.autoPlayOnEdit) setTimeout(() => playSE(), 50);
 }
 
 export function setCategory(cat, btn) {
@@ -315,13 +325,19 @@ async function renderUserItems() {
   }
 
   list.innerHTML = items.map((p) => `
-    <button class="preset-btn" onclick="loadUserPreset(${p.id})" id="pb-user-${p.id}">
-      <div class="preset-icon" style="background:rgba(108,99,255,.10);color:var(--accent2)">♪</div>
-      <div class="preset-info">
-        <div class="preset-name">${isEn ? (p.name || 'SE') : (p.name || 'SE')}</div>
-        <div class="preset-desc">${p.params?.wave || ''} ${p.params?.frequency ? `· ${p.params.frequency}Hz` : ''}</div>
+    <div class="preset-btn" id="pb-user-${p.id}">
+      <div class="preset-btn-load" onclick="loadUserPreset(${p.id})">
+        <div class="preset-icon" style="background:rgba(108,99,255,.10);color:var(--accent2)">♪</div>
+        <div class="preset-info">
+          <div class="preset-name">${p.name || 'SE'}</div>
+          <div class="preset-desc">${p.params?.wave || ''} ${p.params?.frequency ? `· ${p.params.frequency}Hz` : ''}</div>
+        </div>
       </div>
-    </button>
+      <div class="preset-item-actions">
+        <button class="preset-item-btn" title="リネーム" onclick="renameUserItem(${p.id})">✎</button>
+        <button class="preset-item-btn del" title="削除" onclick="deleteUserPreset(${p.id})">✕</button>
+      </div>
+    </div>
   `).join('');
 }
 
@@ -608,6 +624,7 @@ async function renderSubTabs() {
   subTabs.innerHTML = '';
   if (!subtabsOrdered.length) {
     subTabs.innerHTML = `<div style="padding:8px;color:var(--text3);font-size:11px">No subtabs</div>`;
+    subTabs.innerHTML += `<button class="cat-tab library-add-subtab-tab" onclick="addUserSubTab()" title="Add subtab">＋ Subtab</button>`;
     return;
   }
 
@@ -624,6 +641,11 @@ async function renderSubTabs() {
       <button class="cat-tab${active}" draggable="true" data-subtab-id="${st.id}" onclick="selectUserSubTab(${JSON.stringify(st.id)},this)">${st.name}</button>
     `;
   }
+
+  // Add-subtab tab at the right side of the same row
+  subTabs.innerHTML += `
+    <button class="cat-tab library-add-subtab-tab" onclick="addUserSubTab()" title="Add subtab">＋ Subtab</button>
+  `;
 
   _attachSubTabsDnD();
 }
@@ -658,14 +680,12 @@ function _renderLibraryActions() {
   const el = document.getElementById('libraryActions');
   if (!el) return;
 
-  const disabled = !app.activeUserGameId;
   el.innerHTML = `
     <button
       class="btn-secondary library-actions-open-btn"
       style="font-size:11px; padding:10px 14px; width:100%;"
       onclick="openLibraryModal()"
-      ${disabled ? 'disabled' : ''}
-      title="${disabled ? 'Select a user game/subtab first' : 'Open library commands'}"
+      title="Open library commands"
     >
       LIBRARY COMMANDS
     </button>
