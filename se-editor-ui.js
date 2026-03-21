@@ -4,7 +4,7 @@ import {
   createLayer, replaceLayersWithSingleFromFlat, pickSynthFromState
 } from './se-state.js';
 import { masterGain, playSE } from './se-audio-engine.js';
-import { scheduleSessionSave, dbGetUserGame } from './se-db.js';
+import { scheduleSessionSave, dbGetUserGame, dbReorderItemsInSubTab } from './se-db.js';
 import { t, getLang } from './se-i18n.js';
 import { debugLibrary } from './se-debug.js';
 
@@ -123,6 +123,75 @@ export function setCategory(cat, btn) {
 
 // ---------- Preset list rendering ----------
 
+let _draggingUserItemId = null;
+let _lastUserItemOrderIds = [];
+
+function _moveItemIdInArray(arr, from, to) {
+  const a = [...arr];
+  const [x] = a.splice(from, 1);
+  a.splice(to, 0, x);
+  return a;
+}
+
+function _attachUserItemsDnD(list) {
+  if (!app.libraryReorderMode) return;
+  const gameId = app.activeUserGameId;
+  const subTabId = app.activeUserSubTabId;
+  if (!gameId || !subTabId) return;
+
+  const rows = [...list.querySelectorAll('.preset-btn[data-item-id]')];
+  const handles = [...list.querySelectorAll('.preset-item-dnd-handle')];
+  _lastUserItemOrderIds = rows.map(r => r.dataset.itemId);
+
+  handles.forEach((handle) => {
+    const id = handle.dataset.itemId;
+    if (!id) return;
+    handle.addEventListener('dragstart', (e) => {
+      _draggingUserItemId = id;
+      handle.classList.add('is-dnd-dragging');
+      const row = rows.find(r => r.dataset.itemId === id);
+      row?.classList.add('is-dnd-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', id); } catch { /* ignore */ }
+    });
+    handle.addEventListener('dragend', () => {
+      _draggingUserItemId = null;
+      list.querySelectorAll('.preset-btn').forEach(x => x.classList.remove('is-dnd-over', 'is-dnd-dragging'));
+      list.querySelectorAll('.preset-item-dnd-handle').forEach(x => x.classList.remove('is-dnd-dragging'));
+    });
+  });
+
+  rows.forEach((row) => {
+    const targetId = row.dataset.itemId;
+    if (!targetId) return;
+
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      row.classList.add('is-dnd-over');
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    row.addEventListener('dragleave', () => {
+      row.classList.remove('is-dnd-over');
+    });
+
+    row.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      row.classList.remove('is-dnd-over');
+      if (!_draggingUserItemId || !_lastUserItemOrderIds.length) return;
+      if (String(targetId) === String(_draggingUserItemId)) return;
+
+      const from = _lastUserItemOrderIds.findIndex(x => String(x) === String(_draggingUserItemId));
+      const to = _lastUserItemOrderIds.findIndex(x => String(x) === String(targetId));
+      if (from < 0 || to < 0 || from === to) return;
+
+      const newOrder = _moveItemIdInArray(_lastUserItemOrderIds, from, to);
+      await dbReorderItemsInSubTab(gameId, subTabId, newOrder);
+      renderPresets();
+    });
+  });
+}
+
 async function renderUserItems() {
   const list = document.getElementById('presetList');
   if (!list) {
@@ -148,17 +217,25 @@ async function renderUserItems() {
   });
 
   if (!items.length) {
+    list.classList.remove('preset-list--reorder');
     list.innerHTML = `<div style="color:var(--text3);font-size:11px;padding:10px">No SE items in this subtab</div>`;
     return;
   }
+
+  const reorder = app.libraryReorderMode;
+  list.classList.toggle('preset-list--reorder', reorder);
 
   list.innerHTML = items.map((p) => {
     const pr = p.params;
     const desc = (pr?.layers && pr.layers.length > 0)
       ? t('library.presetLayersDesc', String(pr.layers.length))
       : `${pr?.wave || ''} ${pr?.frequency ? `· ${pr.frequency}Hz` : ''}`;
+    const handleHtml = reorder
+      ? `<span class="preset-item-dnd-handle" draggable="true" data-item-id="${String(p.id)}" title="${t('library.reorderHandleTitle')}">⠿</span>`
+      : '';
     return `
-    <div class="preset-btn" id="pb-user-${p.id}">
+    <div class="preset-btn" data-item-id="${String(p.id)}" id="pb-user-${p.id}">
+      ${handleHtml}
       <div class="preset-btn-load" onclick='loadUserPreset(${JSON.stringify(p.id)})'>
         <div class="preset-icon" style="background:rgba(108,99,255,.10);color:var(--accent2)">♪</div>
         <div class="preset-info">
@@ -173,6 +250,8 @@ async function renderUserItems() {
     </div>
   `;
   }).join('');
+
+  if (reorder) _attachUserItemsDnD(list);
 }
 
 function renderBuiltInPresets() {
@@ -181,6 +260,7 @@ function renderBuiltInPresets() {
   const isEn = getLang() === 'en';
   if (!list) return;
 
+  list.classList.remove('preset-list--reorder');
   list.innerHTML = presets.map((p, i) => `
     <button class="preset-btn" onclick="loadPreset('${app.currentCategory}',${i})" id="pb-${app.currentCategory}-${i}">
       <div class="preset-icon" style="background:${p.color}22;color:${p.color}">${p.icon}</div>
@@ -204,6 +284,7 @@ export function renderPresets() {
 
   if (app.activeUserGameId && !app.activeUserSubTabId) {
     debugLibrary('renderPresets → user game but no subtab selected', { activeUserGameId: app.activeUserGameId });
+    list.classList.remove('preset-list--reorder');
     list.innerHTML = `<div style="color:var(--text3);font-size:11px;padding:10px">Select a subtab to show SE items</div>`;
     return;
   }

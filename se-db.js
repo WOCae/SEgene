@@ -443,6 +443,37 @@ export async function dbRenameItemInSubTab(gameId, subTabId, itemId, newName) {
   return it;
 }
 
+/**
+ * Reorder items within a subtab. `itemIdsOrdered` must be a permutation of current item ids.
+ * @param {string|number} gameId
+ * @param {string|number} subTabId
+ * @param {Array<string|number>} itemIdsOrdered
+ * @returns {Promise<boolean>}
+ */
+export async function dbReorderItemsInSubTab(gameId, subTabId, itemIdsOrdered) {
+  const game = await dbGetUserGame(gameId);
+  if (!game) return false;
+  const sid = _sid(subTabId);
+  const st = (game.subtabs || []).find(x => _sid(x.id) === sid);
+  if (!st) return false;
+  const items = st.items || [];
+  const map = new Map(items.map(it => [_sid(it.id), it]));
+  if (!Array.isArray(itemIdsOrdered) || itemIdsOrdered.length !== map.size) return false;
+  const next = [];
+  for (const raw of itemIdsOrdered) {
+    const k = _sid(raw);
+    if (!map.has(k)) return false;
+    next.push(map.get(k));
+    map.delete(k);
+  }
+  if (map.size !== 0) return false;
+  st.items = next;
+  st.updatedAt = new Date().toLocaleString('en-US');
+  game.updatedAt = new Date().toLocaleString('en-US');
+  await dbSaveUserGame(game);
+  return true;
+}
+
 // ---------- Temp Board ----------
 
 /** @returns {Array} */

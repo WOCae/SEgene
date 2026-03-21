@@ -215,5 +215,7 @@ export const app = {
   currentCategory: '8bit',
   activePreset: null,
   activeUserGameId: null,
-  activeUserSubTabId: null
+  activeUserSubTabId: null,
+  /** User library: sidebar preset list reorder mode (handle drag only). */
+  libraryReorderMode: false
 };
