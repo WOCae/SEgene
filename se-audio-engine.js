@@ -9,6 +9,37 @@ let analyser = null;
 let masterGain = null;
 let rafId = null;
 
+// キャンバスキャッシュ（毎フレームのreflowを防ぐため1回だけセットアップ）
+let _canvas = null;
+let _canvasCtx = null;
+let _canvasW = 0;
+let _canvasH = 0;
+let _canvasDPR = 1;
+let _silentFrames = 0;
+const SILENT_FRAMES_THRESHOLD = 90; // ~1.5秒(60fps)で無音とみなしRAFを停止
+
+function _setupCanvas() {
+  _canvas = document.getElementById('canvas');
+  if (!_canvas) return;
+  _canvasCtx = _canvas.getContext('2d');
+  _canvasDPR = window.devicePixelRatio || 1;
+  _canvasW = _canvas.offsetWidth;
+  _canvasH = _canvas.offsetHeight;
+  _canvas.width  = _canvasW * _canvasDPR;
+  _canvas.height = _canvasH * _canvasDPR;
+  _canvasCtx.setTransform(_canvasDPR, 0, 0, _canvasDPR, 0, 0);
+}
+
+let _resizeTimer = null;
+function _initCanvasResize() {
+  _setupCanvas();
+  window.addEventListener('resize', () => {
+    clearTimeout(_resizeTimer);
+    // Android回転時に複数回発火するためデバウンス
+    _resizeTimer = setTimeout(_setupCanvas, 150);
+  }, { passive: true });
+}
+
 // Export OGG のときに「ARP/PSEQ を止める」責務をここから分離する
 let stopArpIfPlaying = () => {};
 let stopPseqIfPlaying = () => {};
@@ -31,39 +62,68 @@ export function initAudio() {
 }
 
 export function drawWaveform() {
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-  const W = canvas.offsetWidth, H = canvas.offsetHeight;
-  const buf = new Uint8Array(analyser ? analyser.fftSize : 2048);
+  if (!document.getElementById('canvas')) return;
+  _initCanvasResize();
+  startWaveform();
+}
 
-  function draw() {
-    rafId = requestAnimationFrame(draw);
-    ctx.clearRect(0, 0, W, H);
-    if (analyser) analyser.getByteTimeDomainData(buf);
-    ctx.strokeStyle = '#6c63ff';
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = '#6c63ff';
-    ctx.shadowBlur = 4;
-    ctx.beginPath();
-    const step = W / buf.length;
-    for (let i = 0; i < buf.length; i++) {
-      const v = analyser ? (buf[i] / 128) - 1 : 0;
-      const y = (H / 2) + v * (H / 2 - 10);
-      i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * step, y);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    // center line
-    ctx.strokeStyle = 'rgba(108,99,255,0.2)';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2);
-    ctx.stroke();
+/** 音声再生時に外部から呼び出してRAFループを再開する */
+export function startWaveform() {
+  if (rafId) return; // すでに動いている
+  if (!_canvas) _setupCanvas();
+  _silentFrames = 0;
+  _drawLoop();
+}
+
+function _drawLoop() {
+  if (!_canvas || !_canvasCtx) return;
+  const buf = new Uint8Array(analyser ? analyser.fftSize : 2048);
+  if (analyser) analyser.getByteTimeDomainData(buf);
+
+  // 無音検出: 全サンプルが128ならフラット（無音）
+  let isSilent = true;
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] !== 128) { isSilent = false; break; }
   }
-  draw();
+
+  if (isSilent) {
+    _silentFrames++;
+    if (_silentFrames > SILENT_FRAMES_THRESHOLD) {
+      _drawFrame(buf); // 最後にフラットな状態を描いて止まる
+      rafId = null;
+      return;
+    }
+  } else {
+    _silentFrames = 0;
+  }
+
+  _drawFrame(buf);
+  rafId = requestAnimationFrame(_drawLoop);
+}
+
+function _drawFrame(buf) {
+  const ctx = _canvasCtx;
+  const W = _canvasW, H = _canvasH;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#6c63ff';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#6c63ff';
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  const step = W / buf.length;
+  for (let i = 0; i < buf.length; i++) {
+    const v = analyser ? (buf[i] / 128) - 1 : 0;
+    const y = (H / 2) + v * (H / 2 - 10);
+    i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * step, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // center line
+  ctx.strokeStyle = 'rgba(108,99,255,0.2)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2);
+  ctx.stroke();
 }
 
 function makeNoise(ctx, duration) {
@@ -265,6 +325,7 @@ export function playSE() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
   pushActiveToLayers();
   playLayersOnCtx(audioCtx, masterGain, state);
+  startWaveform(); // 無音でRAFが停止していた場合に再開
 }
 
 export async function exportWAV() {
@@ -535,4 +596,7 @@ export { audioCtx, analyser, masterGain };
 
 // PSEQ / ARP / Compare / TempBoard が呼ぶ「単発SE再生」
 export { playSEOnCtx };
+
+// 音声再生後に波形ループを再開するため外部から呼び出す
+export { startWaveform };
 

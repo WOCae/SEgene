@@ -282,7 +282,7 @@
     border: none;
     color: var(--text3);
     cursor: pointer;
-    transition: all .15s;
+    transition: color .15s, border-bottom-color .15s;
     border-bottom: 2px solid transparent;
     text-align: center;
   }
@@ -385,7 +385,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s;
   }
   .preset-btn:hover { background: var(--bg4); border-color: var(--border2); }
   .preset-btn.active { border-color: var(--accent); background: rgba(108,99,255,.1); }
@@ -435,6 +435,41 @@
   .preset-item-btn:hover { background: var(--bg4); border-color: var(--border2); }
   .preset-item-btn.del { color: #e05; border-color: rgba(238,0,85,.3); }
   .preset-item-btn.del:hover { background: rgba(238,0,85,.1); }
+
+  /* User library: reorder mode (handle drag) */
+  .preset-list.preset-list--reorder {
+    outline: 1px dashed rgba(108,99,255,.35);
+    outline-offset: -4px;
+    border-radius: 8px;
+  }
+  .preset-item-dnd-handle {
+    flex-shrink: 0;
+    width: 26px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    color: var(--text3);
+    font-size: 14px;
+    line-height: 1;
+    user-select: none;
+    -webkit-user-select: none;
+    border-radius: 6px;
+  }
+  .preset-item-dnd-handle:active {
+    cursor: grabbing;
+  }
+  .preset-btn.is-dnd-over {
+    border-color: var(--accent) !important;
+    background: rgba(108,99,255,.1) !important;
+  }
+  .preset-btn.is-dnd-dragging {
+    opacity: .65;
+  }
+  .preset-item-dnd-handle.is-dnd-dragging {
+    opacity: .65;
+  }
 
   /* Center: editor + visualizer (+ arp / pseq below). Single scroll so nothing is clipped off-screen. */
   .center {
@@ -680,7 +715,7 @@
     font-family: var(--mono);
     font-size: 11px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s, color .15s;
     text-align: center;
   }
   .wave-btn:hover { border-color: var(--border2); color: var(--text); }
@@ -717,7 +752,7 @@
     font-size: 14px;
     cursor: pointer;
     letter-spacing: 2px;
-    transition: all .15s;
+    transition: background-color .15s, transform .15s;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -735,7 +770,7 @@
     font-family: var(--mono);
     font-size: 12px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -801,7 +836,7 @@
     font-family: var(--mono);
     font-size: 12px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s;
     letter-spacing: 1px;
   }
   .btn-export:hover { background: rgba(57,217,138,.2); }
@@ -837,7 +872,7 @@
     font-family: var(--mono);
     font-size: 11px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s;
     letter-spacing: 1px;
   }
   .random-btn:hover { background: rgba(255,107,107,.15); }
@@ -905,7 +940,7 @@
     background: var(--bg3);
     border: 1px solid var(--border);
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1025,7 +1060,7 @@
     border: 1px solid var(--border);
     background: var(--bg4);
     color: var(--text2);
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s, color .15s;
     white-space: nowrap;
   }
   .btn-sm:hover { border-color: var(--border2); color: var(--text); }
@@ -1070,7 +1105,7 @@
     font-size: 12px;
     color: var(--text);
     opacity: 0;
-    transition: all .25s;
+    transition: opacity .25s, transform .25s;
     z-index: 200;
     pointer-events: none;
     white-space: nowrap;
@@ -1186,7 +1221,7 @@
     color: var(--text2);
     font-size: 12px;
     cursor: pointer;
-    transition: all .15s;
+    transition: border-color .15s, color .15s, background-color .15s;
     white-space: nowrap;
   }
   .ai-example-chip:hover {
@@ -1207,7 +1242,7 @@
     font-size: 13px;
     letter-spacing: 2px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s;
   }
   .ai-gen-btn:hover:not(:disabled) { background: rgba(57,217,138,.24); border-color: var(--green); }
   .ai-gen-btn:disabled { opacity: .45; cursor: default; }
@@ -1307,7 +1342,7 @@
     font-family: var(--mono);
     font-size: 11px;
     cursor: pointer;
-    transition: all .15s;
+    transition: border-color .15s, color .15s;
     white-space: nowrap;
   }
   .ai-preview-btn:hover { border-color: var(--accent); color: var(--accent2); }
@@ -1321,7 +1356,7 @@
     font-family: var(--mono);
     font-size: 11px;
     cursor: pointer;
-    transition: all .15s;
+    transition: background-color .15s, border-color .15s;
   }
   .ai-apply-btn:hover { background: rgba(57,217,138,.2); border-color: var(--green); }
 
@@ -1339,7 +1374,7 @@
     color: var(--text2);
     font-size: 14px;
     cursor: pointer;
-    transition: all .15s;
+    transition: border-color .15s, color .15s;
     flex-shrink: 0;
     line-height: 1;
   }

@@ -27,7 +27,7 @@
     border: 1px solid rgba(108,99,255,.4);
     background: rgba(108,99,255,.1);
     color: var(--accent2);
-    transition: all .15s;
+    transition: background-color .15s;
     letter-spacing: .5px;
   }
   .tboard-add-btn:hover { background: rgba(108,99,255,.2); }
@@ -40,7 +40,7 @@
     border: 1px solid var(--border);
     background: none;
     color: var(--text3);
-    transition: all .15s;
+    transition: color .15s, border-color .15s;
   }
   .tboard-clear-btn:hover { color: var(--coral); border-color: rgba(255,107,107,.35); }
   .tboard-list {
@@ -58,7 +58,7 @@
     font-size: 10px;
     color: var(--text3);
     cursor: pointer;
-    transition: all .15s;
+    transition: border-color .15s, color .15s;
   }
   .tboard-empty:hover { border-color: var(--accent); color: var(--accent2); }
   .tcard {
@@ -145,7 +145,7 @@
     border: 1px solid var(--border);
     background: var(--bg4);
     color: var(--text2);
-    transition: all .12s;
+    transition: border-color .12s, color .12s;
     text-align: center;
     letter-spacing: .3px;
   }
@@ -267,6 +267,7 @@
       box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
       transform: translateY(100%);
       transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+      will-change: transform;
       flex-direction: column;
       overflow: hidden;
     }
@@ -298,6 +299,7 @@
       inset: 0;
       background: rgba(0, 0, 0, 0.55);
       z-index: 54;
+      transform: translateZ(0); /* 独立した compositing layer に昇格 */
     }
     .mobile-sheet-backdrop.is-visible { display: block; }
 

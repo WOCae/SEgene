@@ -18,10 +18,15 @@ import {
   dbReorderUserGames,
   dbReorderUserSubTabs
 } from './se-db.js';
-import { getLang } from './se-i18n.js';
+import { getLang, t } from './se-i18n.js';
 
 let _draggingGameId = null;
 let _draggingSubTabId = null;
+
+// innerHTML += ループによるDOM再パースを防ぐためのユーティリティ
+function _escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 let _lastUserGameOrderIds = [];
 let _lastUserSubTabOrderIds = [];
 
@@ -91,11 +96,11 @@ async function _fillLibraryModalGameSelect() {
   const sel = document.getElementById('libraryGameSelect');
   if (!sel) return;
   const games = await dbGetUserGames();
-  sel.innerHTML = '';
-  sel.innerHTML += `<option value="__builtin__">PRESETS (Fixed library)</option>`;
+  const parts = ['<option value="__builtin__">PRESETS (Fixed library)</option>'];
   for (const g of games) {
-    sel.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+    parts.push(`<option value="${_escHtml(g.id)}">${_escHtml(g.name)}</option>`);
   }
+  sel.innerHTML = parts.join('');
 }
 
 async function _fillLibraryModalSubTabSelect() {
@@ -116,7 +121,7 @@ async function _fillLibraryModalSubTabSelect() {
       { id: 'ui', label: 'UI' },
       { id: 'env', label: 'ENV' }
     ];
-    for (const c of cats) sel.innerHTML += `<option value="${c.id}">${c.label}</option>`;
+    sel.innerHTML = cats.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
     return;
   }
 
@@ -126,7 +131,7 @@ async function _fillLibraryModalSubTabSelect() {
     sel.innerHTML = `<option value="">(No subtabs)</option>`;
     return;
   }
-  for (const st of subtabs) sel.innerHTML += `<option value="${st.id}">${st.name}</option>`;
+  sel.innerHTML = subtabs.map(st => `<option value="${_escHtml(st.id)}">${_escHtml(st.name)}</option>`).join('');
 }
 
 export async function openLibraryModal() {
@@ -223,22 +228,18 @@ export async function refreshLibraryTabs() {
   gameTabs.innerHTML = '';
 
   const builtInActive = app.activeUserGameId ? '' : ' active';
-  gameTabs.innerHTML += `
-    <button class="cat-tab${builtInActive}" onclick="selectBuiltInLibrary(this)" id="gt-builtin">PRESETS</button>
-  `;
-
   games.sort(_orderCmp);
   _lastUserGameOrderIds = games.map(g => g.id);
+
+  const gameTabParts = [
+    `<button class="cat-tab${builtInActive}" onclick="selectBuiltInLibrary(this)" id="gt-builtin">PRESETS</button>`
+  ];
   for (const g of games) {
     const active = app.activeUserGameId != null && String(app.activeUserGameId) === String(g.id) ? ' active' : '';
-    gameTabs.innerHTML += `
-      <button class="cat-tab${active}" onclick="selectUserGame(${JSON.stringify(g.id)},this)" data-game-id="${g.id}">${g.name}</button>
-    `;
+    gameTabParts.push(`<button class="cat-tab${active}" onclick="selectUserGame(${JSON.stringify(g.id)},this)" data-game-id="${_escHtml(g.id)}">${_escHtml(g.name)}</button>`);
   }
-
-  gameTabs.innerHTML += `
-    <button class="cat-tab library-add-game-tab" onclick="addUserGame()" title="Add game">＋ Game</button>
-  `;
+  gameTabParts.push(`<button class="cat-tab library-add-game-tab" onclick="addUserGame()" title="Add game">＋ Game</button>`);
+  gameTabs.innerHTML = gameTabParts.join('\n  ');
 
   if (app.activeUserGameId) {
     const game = games.find(x => x.id === app.activeUserGameId) || await dbGetUserGame(app.activeUserGameId);
@@ -376,12 +377,10 @@ async function renderSubTabs() {
       { id: 'ui', label: 'UI' },
       { id: 'env', label: 'ENV' }
     ];
-    cats.forEach(c => {
+    subTabs.innerHTML = cats.map(c => {
       const active = app.currentCategory === c.id ? ` active-${c.id}` : '';
-      subTabs.innerHTML += `
-        <button class="cat-tab${active}" onclick="setCategory('${c.id}',this)">${c.label}</button>
-      `;
-    });
+      return `<button class="cat-tab${active}" onclick="setCategory('${c.id}',this)">${c.label}</button>`;
+    }).join('\n    ');
     return;
   }
 
@@ -390,8 +389,7 @@ async function renderSubTabs() {
   const subtabsOrdered = [...subtabs].sort(_orderCmp);
   subTabs.innerHTML = '';
   if (!subtabsOrdered.length) {
-    subTabs.innerHTML = `<div style="padding:8px;color:var(--text3);font-size:11px">No subtabs</div>`;
-    subTabs.innerHTML += `<button class="cat-tab library-add-subtab-tab" onclick="addUserSubTab()" title="Add subtab">＋ Subtab</button>`;
+    subTabs.innerHTML = `<div style="padding:8px;color:var(--text3);font-size:11px">No subtabs</div><button class="cat-tab library-add-subtab-tab" onclick="addUserSubTab()" title="Add subtab">＋ Subtab</button>`;
     return;
   }
 
@@ -401,16 +399,12 @@ async function renderSubTabs() {
   }
 
   _lastUserSubTabOrderIds = subtabsOrdered.map(st => st.id);
-  for (const st of subtabsOrdered) {
+  const subTabParts = subtabsOrdered.map(st => {
     const active = app.activeUserSubTabId != null && String(app.activeUserSubTabId) === String(st.id) ? ' active' : '';
-    subTabs.innerHTML += `
-      <button class="cat-tab${active}" draggable="true" data-subtab-id="${st.id}" onclick="selectUserSubTab(${JSON.stringify(st.id)},this)">${st.name}</button>
-    `;
-  }
-
-  subTabs.innerHTML += `
-    <button class="cat-tab library-add-subtab-tab" onclick="addUserSubTab()" title="Add subtab">＋ Subtab</button>
-  `;
+    return `<button class="cat-tab${active}" draggable="true" data-subtab-id="${_escHtml(st.id)}" onclick="selectUserSubTab(${JSON.stringify(st.id)},this)">${_escHtml(st.name)}</button>`;
+  });
+  subTabParts.push(`<button class="cat-tab library-add-subtab-tab" onclick="addUserSubTab()" title="Add subtab">＋ Subtab</button>`);
+  subTabs.innerHTML = subTabParts.join('\n  ');
 
   _attachSubTabsDnD();
 }
@@ -418,6 +412,9 @@ async function renderSubTabs() {
 function _renderLibraryActions() {
   const el = document.getElementById('libraryActions');
   if (!el) return;
+
+  const showReorder = !!(app.activeUserGameId && app.activeUserSubTabId);
+  const reorderLabel = app.libraryReorderMode ? t('library.reorderDone') : t('library.reorderBtn');
 
   el.innerHTML = `
     <button
@@ -428,12 +425,28 @@ function _renderLibraryActions() {
     >
       LIBRARY COMMANDS
     </button>
+    ${showReorder ? `
+    <button
+      type="button"
+      class="btn-secondary library-reorder-toggle-btn"
+      style="font-size:11px; padding:8px 10px; width:100%;"
+      onclick="toggleLibraryReorderMode()"
+      title="${reorderLabel}"
+    >${reorderLabel}</button>
+    ` : ''}
   `;
+}
+
+export function toggleLibraryReorderMode() {
+  app.libraryReorderMode = !app.libraryReorderMode;
+  renderPresets();
+  _renderLibraryActions();
 }
 
 export function selectBuiltInLibrary() {
   app.activeUserGameId = null;
   app.activeUserSubTabId = null;
+  app.libraryReorderMode = false;
 
   const gameTabs = document.getElementById('gameTabs');
   if (gameTabs) {
@@ -446,12 +459,14 @@ export function selectBuiltInLibrary() {
 }
 
 export async function selectUserGame(gameId) {
+  app.libraryReorderMode = false;
   app.activeUserGameId = gameId;
   app.activeUserSubTabId = null;
   await refreshLibraryTabs();
 }
 
 export async function selectUserSubTab(subTabId) {
+  app.libraryReorderMode = false;
   app.activeUserSubTabId = subTabId;
   await refreshLibraryTabs();
 }
@@ -548,3 +563,7 @@ export async function copyUserSubTab() {
   await refreshLibraryTabs();
   await _syncLibraryModalFromApp();
 }
+
+document.addEventListener('se:langchange', () => {
+  _renderLibraryActions();
+});

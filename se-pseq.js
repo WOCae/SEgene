@@ -1,6 +1,33 @@
 import { state } from './se-state.js';
-import { initAudio, audioCtx, masterGain, playSEOnCtx } from './se-audio-engine.js';
+import { initAudio, audioCtx, masterGain, playSEOnCtx, startWaveform } from './se-audio-engine.js';
 import { scheduleSessionSave } from './se-db.js';
+
+// 共有ドラッグ状態: document リスナーを1組だけにして累積を防ぐ
+const _pseqDrag = { active: false, stepIndex: -1, wrapEl: null, fillEl: null, labelEl: null };
+
+function _pseqDragMove(clientY) {
+  const s = _pseqDrag.stepIndex;
+  const wrap = _pseqDrag.wrapEl;
+  if (!wrap || s < 0) return;
+  const N = PSEQ.scaleNotes.length - 1;
+  const rect = wrap.getBoundingClientRect();
+  const ratio = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+  const idx = Math.round(ratio * N);
+  PSEQ.steps[s].semitone = idx;
+  _pseqDrag.fillEl.style.height = (N > 0 ? idx / N * 100 : 50) + '%';
+  const n = PSEQ.scaleNotes[idx];
+  _pseqDrag.labelEl.textContent = n ? n.label : '';
+  scheduleSessionSave();
+}
+
+function _pseqInstallSharedDocListeners() {
+  if (_pseqInstallSharedDocListeners._done) return;
+  _pseqInstallSharedDocListeners._done = true;
+  document.addEventListener('mousemove', (e) => { if (_pseqDrag.active) _pseqDragMove(e.clientY); });
+  document.addEventListener('touchmove', (e) => { if (_pseqDrag.active) _pseqDragMove(e.touches[0].clientY); }, { passive: true });
+  document.addEventListener('mouseup', () => { _pseqDrag.active = false; });
+  document.addEventListener('touchend', () => { _pseqDrag.active = false; });
+}
 
 export const PSEQ = {
   bpm: 120,
@@ -82,25 +109,25 @@ function pseqRenderGrid() {
     fill.style.height = fillPct + '%';
     wrap.appendChild(fill);
 
-    // Drag interaction
-    let dragging = false;
-    const onMove = (clientY) => {
-      const rect = wrap.getBoundingClientRect();
-      const ratio = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-      const idx = Math.round(ratio * N);
-      PSEQ.steps[s].semitone = idx;
-      fill.style.height = (N > 0 ? idx / N * 100 : 50) + '%';
-      const n = PSEQ.scaleNotes[idx];
-      label.textContent = n ? n.label : '';
-      scheduleSessionSave();
-    };
-
-    wrap.addEventListener('mousedown', (e) => { dragging = true; onMove(e.clientY); e.preventDefault(); });
-    wrap.addEventListener('touchstart', (e) => { dragging = true; onMove(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
-    document.addEventListener('mousemove', (e) => { if (dragging) onMove(e.clientY); });
-    document.addEventListener('touchmove', (e) => { if (dragging) onMove(e.touches[0].clientY); }, { passive: true });
-    document.addEventListener('mouseup', () => { dragging = false; });
-    document.addEventListener('touchend', () => { dragging = false; });
+    // Drag interaction — 共有ドラッグ状態を使用（document リスナーの累積防止）
+    wrap.addEventListener('mousedown', (e) => {
+      _pseqDrag.active = true;
+      _pseqDrag.stepIndex = s;
+      _pseqDrag.wrapEl = wrap;
+      _pseqDrag.fillEl = fill;
+      _pseqDrag.labelEl = label;
+      _pseqDragMove(e.clientY);
+      e.preventDefault();
+    });
+    wrap.addEventListener('touchstart', (e) => {
+      _pseqDrag.active = true;
+      _pseqDrag.stepIndex = s;
+      _pseqDrag.wrapEl = wrap;
+      _pseqDrag.fillEl = fill;
+      _pseqDrag.labelEl = label;
+      _pseqDragMove(e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
 
     // Right-click to mute step
     wrap.addEventListener('contextmenu', (e) => {
@@ -121,6 +148,7 @@ function pseqRenderGrid() {
 
     container.appendChild(lane);
   }
+  _pseqInstallSharedDocListeners(); // 何度呼ばれても1回だけ登録
 }
 
 function pseqHighlightStep(step) {
@@ -143,6 +171,7 @@ function pseqTick() {
       initAudio();
       if (audioCtx.state === 'suspended') audioCtx.resume();
       playSEOnCtx(audioCtx, masterGain, { ...state, frequency: note.hz, duration: noteDur, sweep: 0 });
+      startWaveform(); // 無音でRAFが停止していた場合に再開
     }
   }
   PSEQ.currentStep = (step + 1) % PSEQ.len;
