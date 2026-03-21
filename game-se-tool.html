@@ -131,6 +131,21 @@
         <textarea id="aiGenPrompt" class="ai-textarea" rows="3"
           placeholder="勇者がレベルアップする明るい8bit音" data-i18n-placeholder="aiGen.promptPlaceholder"></textarea>
         <div class="ai-prompt-label" data-i18n="aiGen.promptLabel">作りたいSEを自然言語で説明してください</div>
+        <div class="ai-layer-options">
+          <label class="ai-checkbox-label">
+            <input type="checkbox" id="aiGenLayerMode" onchange="aiGenOnLayerModeChange()">
+            <span data-i18n="aiGen.layerMode">レイヤーで生成（複数を重ねる）</span>
+          </label>
+          <span class="ai-max-layers-wrap" id="aiGenMaxLayersWrap" style="display:none">
+            <span data-i18n="aiGen.maxLayersLabel">最大</span>
+            <select id="aiGenMaxLayers" class="ai-select ai-max-layers-select" title="">
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+            </select>
+            <span data-i18n="aiGen.maxLayersSuffix">レイヤー</span>
+          </span>
+        </div>
       </div>
 
       <!-- Examples -->
@@ -148,6 +163,7 @@
         <div id="aiGenResultName" class="ai-result-name"></div>
         <div id="aiGenResultDesc" class="ai-result-desc"></div>
         <div id="aiGenResultTags" class="ai-result-tags"></div>
+        <div id="aiGenResultLayers" class="ai-result-layers" style="display:none"></div>
         <div class="ai-result-actions">
           <button class="ai-preview-btn" onclick="aiGenPreview()" data-i18n="aiGen.previewBtn">▶ プレビュー</button>
           <button class="ai-apply-btn" onclick="aiGenApply()" data-i18n="aiGen.applyBtn">✓ エディタに適用</button>
@@ -204,6 +220,13 @@
       <canvas id="canvas"></canvas>
     </div>
     <div class="editor-area">
+      <div class="layer-strip-wrap" id="layerStripWrap">
+        <div class="layer-strip-toolbar">
+          <span class="section-title" data-i18n="layers.title">LAYERS</span>
+          <button type="button" class="layer-add-btn" id="layerAddBtn" onclick="layerAdd()" data-i18n-title="layers.add">+</button>
+        </div>
+        <div class="layer-strip" id="layerStrip"></div>
+      </div>
       <div class="section-title">OSCILLATOR</div>
       <div class="wave-selector" id="waveSelector">
         <button class="wave-btn active" onclick="setWave('square',this)">SQUARE</button>

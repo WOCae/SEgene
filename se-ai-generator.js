@@ -1,6 +1,6 @@
 // se-ai-generator.js — AI SE Generator (LLM → Web Audio parameters)
 
-import { state } from './se-state.js';
+import { state, replaceLayersWithSingleFromFlat, applyLayersFromAiParsed } from './se-state.js';
 import { applyStateToUI } from './se-editor-ui.js';
 import { playSE } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
@@ -22,6 +22,8 @@ let _proxyChecking  = false; // 起動待ちポーリング中フラグ
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const KEY_PROVIDER     = 'se-ai-provider';
+const KEY_LAYER_MODE   = 'se-ai-layer-mode';
+const KEY_MAX_LAYERS   = 'se-ai-max-layers';
 const keyModel         = (p) => `se-ai-model-${p}`;
 const apiKey           = (p) => `se-ai-key-${p}`;
 const keyModelCache    = (p) => `se-ai-mcache-${p}`;
@@ -114,8 +116,8 @@ const EXAMPLES = {
   ],
 };
 
-// ── System prompt ─────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are an expert sound designer specializing in game sound effects (SE) using Web Audio API synthesis.
+// ── System prompts ────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT_SINGLE = `You are an expert sound designer specializing in game sound effects (SE) using Web Audio API synthesis.
 
 The user will describe a sound effect in natural language (Japanese or English). Generate optimal synthesis parameters for that sound.
 
@@ -187,10 +189,59 @@ Return ONLY a valid JSON object — no markdown, no code fences, no explanation.
 
 Always aim for crisp, recognizable, game-ready sounds.`;
 
+const SYSTEM_PROMPT_LAYERS = `You are an expert sound designer for layered game sound effects (SE) using Web Audio API synthesis.
+
+The user describes ONE composite sound. Split it into {{MAX_LAYERS}} OR FEWER independent synthesis layers that play simultaneously (e.g. transient click + body tone + noise tail; or attack layer + sustained layer). Assign per-layer mix (0–1), delayMs (0–5000) so the stack matches the description.
+
+## Output Format
+Return ONLY valid JSON — no markdown, no code fences, no explanation.
+
+{
+  "name": "日本語名（10文字以内）",
+  "nameEn": "English name (max 20 chars)",
+  "desc": "どんな重ね音か一言（日本語）",
+  "layers": [
+    {
+      "name": "short role label e.g. クリック",
+      "mix": <0.0-1.0 relative level>,
+      "delayMs": <0-5000, start offset>,
+      "muted": false,
+      "wave": "square" | "sine" | "sawtooth" | "triangle" | "noise",
+      "frequency": <20-2000>,
+      "attack": <1-2000>,
+      "decay": <10-2000>,
+      "sustain": <0.0-1.0>,
+      "release": <10-3000>,
+      "sweep": <-800-800>,
+      "cutoff": <80-20000>,
+      "resonance": <0.1-20>,
+      "distortion": <0-400>,
+      "reverb": <0-100>,
+      "vibrato": <0-20>,
+      "duration": <50-5000>
+    }
+  ]
+}
+
+Use at least 2 layers when the sound benefits from stacking; use up to {{MAX_LAYERS}} layers. Lower mix on subtle layers. Use small delayMs (0-80) for "after transient" emphasis when appropriate.
+
+## Guidelines
+- Combine noise + tonal for impacts/explosions (noise body + sine ring).
+- UI: short sine layer + optional very quiet second layer.
+- Keep each layer musically consistent; total result should match the user description.
+
+## Example (two layers)
+{"name":"金属クリック","nameEn":"Metal click","desc":"硬いクリック＋短い余韻","layers":[{"name":"attack","mix":1,"delayMs":0,"muted":false,"wave":"square","frequency":1200,"attack":1,"decay":40,"sustain":0,"release":80,"sweep":0,"cutoff":10000,"resonance":1,"distortion":0,"reverb":5,"vibrato":0,"duration":120},{"name":"body","mix":0.35,"delayMs":5,"muted":false,"wave":"sine","frequency":600,"attack":2,"decay":100,"sustain":0,"release":150,"sweep":-50,"cutoff":8000,"resonance":2,"distortion":0,"reverb":15,"vibrato":0,"duration":280}]}`;
+
 // ── Module state ──────────────────────────────────────────────────────────────
 let _lastResult = null;
 
 // ── Public: open / close ──────────────────────────────────────────────────────
+function _buildSystemPrompt(layerMode, maxLayers) {
+  if (!layerMode) return SYSTEM_PROMPT_SINGLE;
+  return SYSTEM_PROMPT_LAYERS.replace(/\{\{MAX_LAYERS\}\}/g, String(maxLayers));
+}
+
 export function openAiGenerator() {
   const overlay = document.getElementById('aiGenOverlay');
   if (!overlay) return;
@@ -199,6 +250,28 @@ export function openAiGenerator() {
   _restoreSettings();
   _showResult(null);
   _setStatus('');
+}
+
+/** Max layers row visibility (checkbox) */
+export function aiGenOnLayerModeChange() {
+  _syncLayerModeUI();
+}
+
+function _syncLayerModeUI() {
+  const wrap = document.getElementById('aiGenMaxLayersWrap');
+  const on = !!document.getElementById('aiGenLayerMode')?.checked;
+  if (wrap) wrap.style.display = on ? 'flex' : 'none';
+}
+
+function _restoreLayerOptions() {
+  const cb = document.getElementById('aiGenLayerMode');
+  const sel = document.getElementById('aiGenMaxLayers');
+  if (cb) cb.checked = localStorage.getItem(KEY_LAYER_MODE) === '1';
+  if (sel) {
+    const v = localStorage.getItem(KEY_MAX_LAYERS);
+    if (v && ['2', '3', '4'].includes(v)) sel.value = v;
+  }
+  _syncLayerModeUI();
 }
 
 export function closeAiGenerator() {
@@ -265,8 +338,10 @@ export async function aiGenGenerate() {
   btn.disabled = true;
 
   try {
-    const raw    = await _callApi(desc);
-    const result = _parseResult(raw);
+    const layerMode = !!document.getElementById('aiGenLayerMode')?.checked;
+    const maxLayers = Math.max(2, Math.min(4, parseInt(document.getElementById('aiGenMaxLayers')?.value || '3', 10)));
+    const raw    = await _callApi(desc, { layerMode, maxLayers });
+    const result = _parseResult(raw, { layerMode, maxLayers });
     _showResult(result);
     _setStatus(t('aiGen.genComplete'));
   } catch (e) {
@@ -472,7 +547,7 @@ function _updateKeyPlaceholder(provider, currentValue) {
 }
 
 /** サーバープロキシ経由で Groq を呼び出す */
-async function _callProxy(model, description) {
+async function _callProxy(model, description, systemPrompt, maxTokens) {
   let res;
   try {
     res = await fetch(PROXY_GENERATE_URL, {
@@ -481,11 +556,11 @@ async function _callProxy(model, description) {
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user',   content: description },
         ],
         temperature: 0.7,
-        max_tokens: 4096,
+        max_tokens: maxTokens,
       }),
       signal: AbortSignal.timeout(60000),
     });
@@ -514,6 +589,7 @@ function _restoreSettings() {
   const provider = localStorage.getItem(KEY_PROVIDER) || 'google';
   document.getElementById('aiGenProvider').value = provider;
   aiGenOnProviderChange(); // rebuilds model dropdown + restores key
+  _restoreLayerOptions();
 }
 
 function _saveSettings() {
@@ -525,6 +601,9 @@ function _saveSettings() {
   localStorage.setItem(KEY_PROVIDER, provider);
   if (key)   localStorage.setItem(apiKey(provider), key);
   if (model && model !== '_custom') localStorage.setItem(keyModel(provider), model);
+  localStorage.setItem(KEY_LAYER_MODE, document.getElementById('aiGenLayerMode')?.checked ? '1' : '0');
+  const ml = document.getElementById('aiGenMaxLayers')?.value || '3';
+  localStorage.setItem(KEY_MAX_LAYERS, ['2', '3', '4'].includes(ml) ? ml : '3');
 }
 
 function _setStatus(msg, isError = false) {
@@ -534,7 +613,11 @@ function _setStatus(msg, isError = false) {
   el.className = 'ai-status' + (isError ? ' ai-status-error' : '');
 }
 
-async function _callApi(description) {
+async function _callApi(description, { layerMode = false, maxLayers = 3 } = {}) {
+  const systemPrompt = _buildSystemPrompt(layerMode, maxLayers);
+  const maxTokens    = layerMode ? 6144 : 4096;
+  const maxTokensAnthropic = layerMode ? 4096 : 1024;
+
   const provider  = document.getElementById('aiGenProvider').value;
   const key       = document.getElementById('aiGenApiKey').value.trim();
   const selVal    = document.getElementById('aiGenModel').value;
@@ -547,7 +630,7 @@ async function _callApi(description) {
   // キー未入力の Groq → サーバープロキシ経由を試みる
   if (provider === 'groq' && !key) {
     if (_proxyAvailable === null) await _checkProxy();
-    if (_proxyAvailable) return _callProxy(model, description);
+    if (_proxyAvailable) return _callProxy(model, description, systemPrompt, maxTokens);
   }
 
   const effectiveKey = key;
@@ -565,9 +648,9 @@ async function _callApi(description) {
       },
       body: JSON.stringify({
         model,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: [{ role: 'user', content: description }],
-        max_tokens: 1024,
+        max_tokens: maxTokensAnthropic,
       }),
     });
     if (!res.ok) {
@@ -591,11 +674,11 @@ async function _callApi(description) {
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         { role: 'user',   content: description },
       ],
       temperature: 0.7,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
     }),
   });
 
@@ -606,26 +689,19 @@ async function _callApi(description) {
   return (await res.json()).choices[0].message.content;
 }
 
-function _parseResult(text) {
-  // 1) markdown コードブロック内の JSON を優先抽出
+function _extractJsonRaw(text) {
   const blockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  // 2) それ以外は文字列中の最初の {...} を探す
   const jsonMatch  = blockMatch ? null : text.match(/\{[\s\S]*\}/);
+  return blockMatch ? blockMatch[1].trim()
+    : jsonMatch  ? jsonMatch[0]
+    : text.trim();
+}
 
-  const raw = blockMatch ? blockMatch[1].trim()
-            : jsonMatch  ? jsonMatch[0]
-            : text.trim();
-
-  const obj = JSON.parse(raw);
-
-  // Clamp values to valid ranges
+function _clampSynthFields(obj) {
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v) || 0));
   const VALID_WAVES = ['square', 'sine', 'sawtooth', 'triangle', 'noise'];
-
+  const VALID_FILTERS = ['lowpass', 'highpass', 'bandpass', 'notch', 'allpass'];
   return {
-    name:        String(obj.name       || obj.nameEn || '生成SE'),
-    nameEn:      String(obj.nameEn     || obj.name   || 'Generated SE'),
-    desc:        String(obj.desc       || ''),
     wave:        VALID_WAVES.includes(obj.wave) ? obj.wave : 'square',
     frequency:   clamp(obj.frequency,   20,   2000),
     attack:      clamp(obj.attack,       1,   2000),
@@ -635,6 +711,7 @@ function _parseResult(text) {
     sweep:       clamp(obj.sweep,     -800,    800),
     cutoff:      clamp(obj.cutoff,      80,  20000),
     resonance:   clamp(obj.resonance,  0.1,     20),
+    filterType:  VALID_FILTERS.includes(obj.filterType) ? obj.filterType : 'lowpass',
     distortion:  clamp(obj.distortion,   0,    400),
     reverb:      clamp(obj.reverb,       0,    100),
     vibrato:     clamp(obj.vibrato,      0,     20),
@@ -642,13 +719,53 @@ function _parseResult(text) {
   };
 }
 
+function _parseResult(text, { layerMode = false, maxLayers = 3 } = {}) {
+  const raw = _extractJsonRaw(text);
+  const obj = JSON.parse(raw);
+
+  const meta = {
+    name:   String(obj.name   || obj.nameEn || '生成SE'),
+    nameEn: String(obj.nameEn || obj.name   || 'Generated SE'),
+    desc:   String(obj.desc   || ''),
+  };
+
+  if (layerMode) {
+    if (!obj.layers || !Array.isArray(obj.layers) || obj.layers.length === 0) {
+      throw new Error(t('aiGen.layersMissing'));
+    }
+    const cap = Math.max(2, Math.min(4, maxLayers));
+    const layers = obj.layers.slice(0, cap).map((row) => {
+      const s = _clampSynthFields(row);
+      return {
+        name: String(row.name || ''),
+        mix: row.mix !== undefined && row.mix !== null ? Math.max(0, Math.min(1, Number(row.mix))) : 1,
+        delayMs: row.delayMs !== undefined && row.delayMs !== null
+          ? Math.max(0, Math.min(5000, Math.round(Number(row.delayMs))))
+          : 0,
+        muted: !!row.muted,
+        ...s,
+      };
+    });
+    return { mode: 'layers', ...meta, layers };
+  }
+
+  const s = _clampSynthFields(obj);
+  return { mode: 'single', ...meta, ...s };
+}
+
 function _showResult(result) {
   const area = document.getElementById('aiGenResult');
   if (!area) return;
 
+  const layersHost = document.getElementById('aiGenResultLayers');
+
   if (!result) {
     _lastResult = null;
     area.style.display = 'none';
+    if (layersHost) {
+      layersHost.innerHTML = '';
+      layersHost.style.display = 'none';
+    }
     return;
   }
 
@@ -658,34 +775,58 @@ function _showResult(result) {
   document.getElementById('aiGenResultName').textContent = result.name;
   document.getElementById('aiGenResultDesc').textContent = result.desc;
 
-  const tags = [
-    result.wave?.toUpperCase(),
-    `${result.frequency}Hz`,
-    `${(result.duration / 1000).toFixed(2)}s`,
-    result.sweep  ? `sweep:${result.sweep}`   : null,
-    result.reverb ? `rvb:${result.reverb}%`   : null,
-    result.vibrato ? `vib:${result.vibrato}Hz` : null,
-  ].filter(Boolean);
+  if (result.mode === 'layers') {
+    document.getElementById('aiGenResultTags').innerHTML =
+      `<span class="ai-tag">${t('aiGen.layerBadge', String(result.layers.length))}</span>`;
+    if (layersHost) {
+      layersHost.style.display = 'block';
+      layersHost.innerHTML = result.layers.map((L, i) => `
+        <div class="ai-layer-preview">
+          <span class="ai-layer-preview-name">${i + 1}. ${L.name || t('aiGen.layerUnnamed')}</span>
+          <span class="ai-layer-preview-meta">${String(L.wave).toUpperCase()} · ${L.frequency}Hz · mix ${Math.round(L.mix * 100)}% · ${L.delayMs}ms</span>
+        </div>
+      `).join('');
+    }
+  } else {
+    if (layersHost) {
+      layersHost.innerHTML = '';
+      layersHost.style.display = 'none';
+    }
+    const tags = [
+      result.wave?.toUpperCase(),
+      `${result.frequency}Hz`,
+      `${(result.duration / 1000).toFixed(2)}s`,
+      result.sweep  ? `sweep:${result.sweep}`   : null,
+      result.reverb ? `rvb:${result.reverb}%`   : null,
+      result.vibrato ? `vib:${result.vibrato}Hz` : null,
+    ].filter(Boolean);
 
-  document.getElementById('aiGenResultTags').innerHTML =
-    tags.map(t => `<span class="ai-tag">${t}</span>`).join('');
+    document.getElementById('aiGenResultTags').innerHTML =
+      tags.map(x => `<span class="ai-tag">${x}</span>`).join('');
+  }
 }
 
 function _applyToState(r) {
-  Object.assign(state, {
-    wave:       r.wave,
-    frequency:  r.frequency,
-    attack:     r.attack,
-    decay:      r.decay,
-    sustain:    r.sustain,
-    release:    r.release,
-    sweep:      r.sweep,
-    cutoff:     r.cutoff,
-    resonance:  r.resonance,
-    distortion: r.distortion,
-    reverb:     r.reverb,
-    vibrato:    r.vibrato,
-    duration:   r.duration,
-  });
+  if (r.mode === 'layers') {
+    applyLayersFromAiParsed(r.layers);
+  } else {
+    Object.assign(state, {
+      wave:       r.wave,
+      frequency:  r.frequency,
+      attack:     r.attack,
+      decay:      r.decay,
+      sustain:    r.sustain,
+      release:    r.release,
+      sweep:      r.sweep,
+      cutoff:     r.cutoff,
+      resonance:  r.resonance,
+      filterType: r.filterType || 'lowpass',
+      distortion: r.distortion,
+      reverb:     r.reverb,
+      vibrato:    r.vibrato,
+      duration:   r.duration,
+    });
+    replaceLayersWithSingleFromFlat();
+  }
   applyStateToUI();
 }

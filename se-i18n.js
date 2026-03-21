@@ -73,15 +73,32 @@ const STRINGS = {
     'aiGen.genComplete': '生成完了！プレビューして適用してください',
     'aiGen.error': 'エラー: {0}',
     'aiGen.applied': '「{0}」をエディタに適用しました',
+    'aiGen.layerMode': 'レイヤーで生成（複数を重ねる）',
+    'aiGen.maxLayersLabel': '最大',
+    'aiGen.maxLayersSuffix': 'レイヤー',
+    'aiGen.layerBadge': 'レイヤー {0}',
+    'aiGen.layerUnnamed': 'レイヤー',
+    'aiGen.layersMissing': 'レイヤー形式の JSON（layers 配列）が得られませんでした。もう一度生成するか、レイヤーで生成をオフにしてください。',
 
     // Library actions
     'library.addBtn': '＋ ライブラリに追加',
     'library.selectGameSubtab': '先にゲームとサブタブを選択してください',
     'library.selectGame': 'ゲームを選択してください',
     'library.selectSubtab': 'サブタブを選択してください',
+    // Layers (multi-SE mix)
+    'layers.title': 'レイヤー',
+    'layers.add': 'レイヤーを追加',
+    'layers.remove': 'レイヤーを削除',
+    'layers.mute': 'ミュート',
+    'layers.mixShort': 'Mix',
+    'layers.delayShort': '遅延',
+    'layers.editLayer': 'このレイヤーを編集',
+    'layers.defaultName': 'レイヤー {0}',
+
     'library.noItems': 'アイテムがありません',
     'library.jszipMissing': 'JSZip が読み込まれていません',
     'library.renamePrompt': 'SE名を変更:',
+    'library.presetLayersDesc': 'レイヤー ×{0}',
     'library.addPrompt': 'SE名を入力:',
     'toast.processing': '{0}件を {1} で処理中…',
     'toast.exportedCount': '{0}件をエクスポートしました',
@@ -218,15 +235,32 @@ const STRINGS = {
     'aiGen.genComplete': 'Done! Preview or apply to editor.',
     'aiGen.error': 'Error: {0}',
     'aiGen.applied': 'Applied "{0}" to editor',
+    'aiGen.layerMode': 'Generate with layers (stacked)',
+    'aiGen.maxLayersLabel': 'Max',
+    'aiGen.maxLayersSuffix': 'layers',
+    'aiGen.layerBadge': '{0} layers',
+    'aiGen.layerUnnamed': 'layer',
+    'aiGen.layersMissing': 'Could not parse layered JSON (missing "layers" array). Try again or turn off layer mode.',
 
     // Library actions
     'library.addBtn': '＋ Add to Library',
     'library.selectGameSubtab': 'Please select a game and subtab first',
     'library.selectGame': 'Please select a game',
     'library.selectSubtab': 'Please select a subtab',
+    // Layers (multi-SE mix)
+    'layers.title': 'LAYERS',
+    'layers.add': 'Add layer',
+    'layers.remove': 'Remove layer',
+    'layers.mute': 'Mute',
+    'layers.mixShort': 'Mix',
+    'layers.delayShort': 'Delay',
+    'layers.editLayer': 'Edit this layer',
+    'layers.defaultName': 'Layer {0}',
+
     'library.noItems': 'No items',
     'library.jszipMissing': 'JSZip is not loaded',
     'library.renamePrompt': 'Rename SE:',
+    'library.presetLayersDesc': 'Layers ×{0}',
     'library.addPrompt': 'Enter SE name:',
     'toast.processing': 'Processing {0} items as {1}…',
     'toast.exportedCount': 'Exported {0} item(s)',
@@ -353,7 +387,7 @@ function _helpJa() {
     <h3 class="help-h3">画面の構成</h3>
     <ul>
       <li><b>左（PRESETS）</b>：カテゴリ（8BIT/REAL/UI/ENV）とプリセット一覧。選択で右側のエディタへ反映されます。</li>
-      <li><b>中央（エディタ）</b>：OSCILLATOR / ENVELOPE(ADSR) / PITCH / FILTER / EFFECTS。波形選択・スライダーで現在の <span style="font-family:var(--mono)">state</span> を更新します。</li>
+      <li><b>中央（エディタ）</b>：<b>LAYERS</b> で複数の SE を重ねてミックス（＋でレイヤー追加、Mix/遅延/ミュート）。その下の OSCILLATOR / ENVELOPE(ADSR) 等は<b>選択中レイヤー</b>のパラメータです。</li>
       <li><b>ARPEGGIATOR</b>：A で開始/停止。グリッドの各ステップに対して音程が生成されます。</li>
       <li><b>PITCH SEQUENCER</b>：P で表示切替。ON の場合は開始/停止も同時に制御されます。</li>
       <li><b>右（パネル）</b>：PLAY / EXPORT / RANDOMIZE / TEMP BOARD / OPTIONS（PSEQ 表示トグル等）。</li>
@@ -418,7 +452,7 @@ function _helpEn() {
     <h3 class="help-h3">Layout</h3>
     <ul>
       <li><b>Left (PRESETS)</b>: Categories (8BIT/REAL/UI/ENV) and preset list. Selecting one loads it into the editor.</li>
-      <li><b>Center (Editor)</b>: OSCILLATOR / ENVELOPE (ADSR) / PITCH / FILTER / EFFECTS. Wave selection and sliders update the current <span style="font-family:var(--mono)">state</span>.</li>
+      <li><b>Center (Editor)</b>: <b>LAYERS</b> mixes multiple SEs (＋ add layer; Mix / delay / mute). Below that, OSCILLATOR / ENVELOPE / etc. edit the <b>selected layer</b>.</li>
       <li><b>ARPEGGIATOR</b>: Start/stop with <kbd class="kbd">A</kbd>. Each grid step generates a pitch.</li>
       <li><b>PITCH SEQUENCER</b>: Toggle visibility with <kbd class="kbd">P</kbd>. Start/stop is also controlled when toggled on.</li>
       <li><b>Right (Panel)</b>: PLAY / EXPORT / RANDOMIZE / TEMP BOARD / OPTIONS (PSEQ toggle, etc.).</li>

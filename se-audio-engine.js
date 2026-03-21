@@ -1,4 +1,6 @@
-import { state, app } from './se-state.js';
+import {
+  state, app, ensureLayers, pushActiveToLayers, pickSynthFromState
+} from './se-state.js';
 import { showToast } from './se-toast.js';
 import { t } from './se-i18n.js';
 
@@ -93,9 +95,17 @@ function makeConvolver(ctx, reverbAmount) {
   return { conv, wet };
 }
 
-function playSEOnCtx(ctx, dest, params) {
+/**
+ * @param {BaseAudioContext} ctx
+ * @param {AudioNode} dest
+ * @param {object} params
+ * @param {{ startAt?: number, startOffsetSec?: number }} [opts]
+ */
+function playSEOnCtx(ctx, dest, params, opts = {}) {
   const p = params || state;
-  const now = Math.max(0, ctx.currentTime);
+  const now = opts.startAt != null
+    ? opts.startAt
+    : Math.max(0, ctx.currentTime) + (Number(opts.startOffsetSec) || 0);
   const dur = Math.max(0.01, p.duration / 1000);
   const atkT = Math.max(0.001, p.attack / 1000);
   const decT = Math.max(0.001, p.decay / 1000);
@@ -180,17 +190,89 @@ function playSEOnCtx(ctx, dest, params) {
   return { src, dur: endT - now + 0.05 };
 }
 
+/** Max render length (seconds) for layered mix offline / OGG. */
+export function computeMixDurationSec(rootState) {
+  const rs = rootState || state;
+  let layers = rs.layers;
+  if ((!layers || layers.length === 0) && rs === state) {
+    ensureLayers();
+    layers = state.layers;
+  }
+  if (layers && layers.length > 0) {
+    let maxEnd = 0.35;
+    for (const L of layers) {
+      if (L.muted) continue;
+      const delay = (L.delayMs || 0) / 1000;
+      const tail = (L.duration || 500) / 1000 + (L.release || 200) / 1000 + 0.35;
+      maxEnd = Math.max(maxEnd, delay + tail);
+    }
+    return maxEnd;
+  }
+  const p = pickSynthFromState(rs);
+  return Math.max(0.35, p.duration / 1000 + p.release / 1000 + 0.35);
+}
+
+/**
+ * Mix all layers into `dest`. `rootState` may be global `state` or a preset `{ layers: [...] }` (no `ensureLayers` side effects on preset-only objects).
+ */
+export function playLayersOnCtx(ctx, dest, rootState) {
+  const rs = rootState || state;
+  let layers = rs.layers;
+  if ((!layers || layers.length === 0) && rs === state) {
+    ensureLayers();
+    layers = state.layers;
+  }
+  if (layers && layers.length > 0) {
+    const baseNow = Math.max(0, ctx.currentTime);
+    for (const layer of layers) {
+      if (layer.muted) continue;
+      const g = ctx.createGain();
+      g.gain.value = Math.max(0, Math.min(1, layer.mix));
+      g.connect(dest);
+      const p = pickSynthFromState(layer);
+      playSEOnCtx(ctx, g, p, { startAt: baseNow + (layer.delayMs || 0) / 1000 });
+    }
+    return;
+  }
+  playSEOnCtx(ctx, dest, pickSynthFromState(rs));
+}
+
+/** Play single flat params (Temp Board legacy cards). */
+export function playFlatParamsOnCtx(ctx, dest, flatParams) {
+  playSEOnCtx(ctx, dest, flatParams);
+}
+
+/** Slot / card playback: layered snapshot or flat preset. */
+export function playAnyParamsOnCtx(ctx, dest, p) {
+  if (p && p.layers && Array.isArray(p.layers) && p.layers.length > 0) {
+    playLayersOnCtx(ctx, dest, p);
+  } else {
+    playSEOnCtx(ctx, dest, p);
+  }
+}
+
+/** UI badges / timeouts — ms (capped). */
+export function estimatePlaybackDurationMs(flatOrState) {
+  if (flatOrState?.layers?.length) {
+    return Math.min(computeMixDurationSec(flatOrState) * 1000 + 100, 8000);
+  }
+  const p = flatOrState || {};
+  return Math.min((p.duration || 500) + (p.release || 200) + 200, 4000);
+}
+
 export function playSE() {
   initAudio();
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  playSEOnCtx(audioCtx, masterGain, state);
+  pushActiveToLayers();
+  playLayersOnCtx(audioCtx, masterGain, state);
 }
 
 export async function exportWAV() {
   initAudio();
-  const dur = state.duration / 1000 + state.release / 1000 + 0.3;
-  const offCtx = new OfflineAudioContext(2, audioCtx.sampleRate * dur, audioCtx.sampleRate);
-  playSEOnCtx(offCtx, offCtx.destination, state);
+  pushActiveToLayers();
+  const dur = computeMixDurationSec(state);
+  const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+  playLayersOnCtx(offCtx, offCtx.destination, state);
   const rendered = await offCtx.startRendering();
   const wav = encodeWAV(rendered);
   const blob = new Blob([wav], { type: 'audio/wav' });
@@ -208,9 +290,10 @@ export async function exportMP3() {
     return;
   }
 
-  const dur = state.duration / 1000 + state.release / 1000 + 0.3;
+  pushActiveToLayers();
+  const dur = computeMixDurationSec(state);
   const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-  playSEOnCtx(offCtx, offCtx.destination, state);
+  playLayersOnCtx(offCtx, offCtx.destination, state);
   const rendered = await offCtx.startRendering();
 
   const sampleRate = rendered.sampleRate;
@@ -304,8 +387,10 @@ export async function exportOGG() {
   // Start recording before playback starts.
   recorder.start();
 
-  const { dur } = playSEOnCtx(audioCtx, exportGain, state);
-  const stopMs = Math.ceil((dur * 1000) + 250); // small safety tail
+  pushActiveToLayers();
+  const dur = computeMixDurationSec(state);
+  playLayersOnCtx(audioCtx, exportGain, state);
+  const stopMs = Math.ceil(dur * 1000 + 250); // small safety tail
   window.setTimeout(() => {
     try { recorder.stop(); } catch {}
   }, stopMs);
@@ -323,8 +408,19 @@ export async function exportOGG() {
   a.click();
 }
 
+function _hasLayers(p) {
+  return p && Array.isArray(p.layers) && p.layers.length > 0;
+}
+
 export async function renderParamsToWAV(params) {
   initAudio();
+  if (_hasLayers(params)) {
+    const dur = computeMixDurationSec(params);
+    const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+    playLayersOnCtx(offCtx, offCtx.destination, params);
+    const rendered = await offCtx.startRendering();
+    return encodeWAV(rendered);
+  }
   const dur = params.duration / 1000 + params.release / 1000 + 0.3;
   const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
   playSEOnCtx(offCtx, offCtx.destination, params);
@@ -336,10 +432,18 @@ export async function renderParamsToMP3(params) {
   initAudio();
   const lame = window.lamejs;
   if (!lame) return null;
-  const dur = params.duration / 1000 + params.release / 1000 + 0.3;
-  const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-  playSEOnCtx(offCtx, offCtx.destination, params);
-  const rendered = await offCtx.startRendering();
+  let rendered;
+  if (_hasLayers(params)) {
+    const dur = computeMixDurationSec(params);
+    const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+    playLayersOnCtx(offCtx, offCtx.destination, params);
+    rendered = await offCtx.startRendering();
+  } else {
+    const dur = params.duration / 1000 + params.release / 1000 + 0.3;
+    const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+    playSEOnCtx(offCtx, offCtx.destination, params);
+    rendered = await offCtx.startRendering();
+  }
   const sampleRate = rendered.sampleRate;
   const left = rendered.getChannelData(0);
   const right = rendered.getChannelData(1);
@@ -384,8 +488,15 @@ export async function renderParamsToOGG(params) {
   recorder.ondataavailable = (ev) => { if (ev.data?.size > 0) chunks.push(ev.data); };
   const done = new Promise((res) => { recorder.onstop = () => res(); });
   recorder.start();
-  const { dur } = playSEOnCtx(audioCtx, gain, params);
-  window.setTimeout(() => { try { recorder.stop(); } catch {} }, Math.ceil(dur * 1000 + 250));
+  let stopMs;
+  if (_hasLayers(params)) {
+    playLayersOnCtx(audioCtx, gain, params);
+    stopMs = Math.ceil(computeMixDurationSec(params) * 1000 + 250);
+  } else {
+    const { dur } = playSEOnCtx(audioCtx, gain, params);
+    stopMs = Math.ceil(dur * 1000 + 250);
+  }
+  window.setTimeout(() => { try { recorder.stop(); } catch {} }, stopMs);
   await done;
   gain.disconnect();
   if (!chunks.length) return null;

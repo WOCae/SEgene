@@ -8,6 +8,17 @@ import {
   randomize,
   syncVolumeSlider,
   applyStateToUI,
+  layerSelect,
+  layerAdd,
+  layerRemove,
+  layerMixChange,
+  layerDelayChange,
+  layerToggleMute
+} from './se-editor-ui.js';
+import {
+  openLibraryModal,
+  closeLibraryModal,
+  applyLibraryModalSelection,
   initLibraryTabs,
   refreshLibraryTabs,
   selectBuiltInLibrary,
@@ -21,8 +32,7 @@ import {
   deleteUserSubTab,
   renameUserSubTab,
   copyUserSubTab
-} from './se-editor-ui.js';
-import { openLibraryModal, closeLibraryModal, applyLibraryModalSelection } from './se-editor-ui.js';
+} from './se-library-ui.js';
 import { drawWaveform, playSE, exportWAV, exportOGG, exportMP3, registerExportStopHandlers } from './se-audio-engine.js';
 import {
   openManager,
@@ -43,10 +53,10 @@ import { ARP, arpBpmChange, arpDivChange, arpStepsChange, arpStart, arpStop, arp
 import { PSEQ, pseqBpmChange, pseqDivChange, pseqLenChange, pseqStart, pseqStop, pseqRebuild, pseqQuick, pseqToggleMute, togglePseq, initPseq } from './se-pseq.js';
 import { tbAdd, tbClearAll, tbPlay, tbLoadToEditor, tbDelete, tbDragStart, tbDragEnd, tbDragOver, tbDrop, tbRenameCard, initTb } from './se-temp-board.js';
 import { showToast } from './se-toast.js';
-import { state, app } from './se-state.js';
+import { state, app, ensureLayers } from './se-state.js';
 import { setSessionSaver, dbSaveSession, dbRestoreSession, migrateFromLocalStorage, scheduleSessionSave } from './se-db.js';
 import { t, setLang, getLang, applyI18n } from './se-i18n.js';
-import { openAiGenerator, closeAiGenerator, aiGenOnProviderChange, aiGenOnModelSelectChange, aiGenSetExample, aiGenGenerate, aiGenPreview, aiGenApply, aiGenRefreshModels, initAiGenerator } from './se-ai-generator.js';
+import { openAiGenerator, closeAiGenerator, aiGenOnProviderChange, aiGenOnModelSelectChange, aiGenOnLayerModeChange, aiGenSetExample, aiGenGenerate, aiGenPreview, aiGenApply, aiGenRefreshModels, initAiGenerator } from './se-ai-generator.js';
 
 // exportOGG 用: 録音中の混在を避けるために、必要なら ARP/PSEQ を停止
 registerExportStopHandlers({
@@ -163,6 +173,12 @@ Object.assign(window, {
   pseqToggleMute,
   togglePseq,
   toggleAutoPlayOnEdit,
+  layerSelect,
+  layerAdd,
+  layerRemove,
+  layerMixChange,
+  layerDelayChange,
+  layerToggleMute,
   playSE,
   exportWAV,
   exportOGG,
@@ -192,12 +208,10 @@ Object.assign(window, {
   renameUserItem,
   exportSubTabZip,
   exportGameZip,
-  openLibraryModal,
-  closeLibraryModal,
-  applyLibraryModalSelection,
   openAiGenerator,
   closeAiGenerator,
   aiGenOnProviderChange,
+  aiGenOnLayerModeChange,
   aiGenSetExample,
   aiGenGenerate,
   aiGenPreview,
@@ -568,6 +582,10 @@ async function restoreSessionData(session) {
   // IDB からセッション復元（あれば上書き）
   const session = await dbRestoreSession();
   if (session) await restoreSessionData(session);
+  else {
+    ensureLayers();
+    applyStateToUI();
+  }
   // Rebuild library UI after session restore
   await refreshLibraryTabs();
 

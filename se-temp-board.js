@@ -1,7 +1,7 @@
-import { state, app } from './se-state.js';
-import { initAudio, audioCtx, masterGain, playSEOnCtx } from './se-audio-engine.js';
+import { state, app, ensureLayers, pullLayerToState, replaceLayersWithSingleFromFlat } from './se-state.js';
+import { initAudio, audioCtx, masterGain, playAnyParamsOnCtx, estimatePlaybackDurationMs } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
-import { updateParam, syncVolumeSlider } from './se-editor-ui.js';
+import { updateParam, syncVolumeSlider, renderLayerStrip } from './se-editor-ui.js';
 import { dbGetTempBoard, dbSaveTempBoard } from './se-db.js';
 import { t } from './se-i18n.js';
 
@@ -46,7 +46,7 @@ export function tbPlay(id) {
 
   initAudio();
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  playSEOnCtx(audioCtx, masterGain, card.params);
+  playAnyParamsOnCtx(audioCtx, masterGain, card.params);
 
   // Animate playing line
   const line = document.getElementById(`tb-line-${id}`);
@@ -54,7 +54,7 @@ export function tbPlay(id) {
     line.style.transition = 'none';
     line.style.width = '0%';
     requestAnimationFrame(() => {
-      const dur = Math.min(card.params.duration + card.params.release + 100, 3000);
+      const dur = Math.min(estimatePlaybackDurationMs(card.params), 3000);
       line.style.transition = `width ${dur}ms linear`;
       line.style.width = '100%';
       setTimeout(() => { line.style.transition = 'none'; line.style.width = '0%'; }, dur + 50);
@@ -67,6 +67,13 @@ export function tbLoadToEditor(id) {
   if (!card) return;
 
   Object.assign(state, card.params);
+
+  if (state.layers && Array.isArray(state.layers) && state.layers.length > 0) {
+    ensureLayers();
+    pullLayerToState(state.activeLayerIndex ?? 0);
+  } else {
+    replaceLayersWithSingleFromFlat();
+  }
 
   const ids = ['attack', 'decay', 'release', 'frequency', 'sweep', 'cutoff', 'resonance', 'distortion', 'reverb', 'vibrato', 'duration'];
   ids.forEach((k) => {
@@ -85,6 +92,7 @@ export function tbLoadToEditor(id) {
 
   if (state.filterType) document.getElementById('filterType').value = state.filterType;
   syncVolumeSlider();
+  renderLayerStrip();
 
   document.getElementById('presetInfoName').textContent = card.name;
   document.getElementById('presetInfoDesc').textContent = t('info.fromTb');

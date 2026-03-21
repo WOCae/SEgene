@@ -1,7 +1,12 @@
-import { state, app } from './se-state.js';
-import { initAudio, audioCtx, analyser, masterGain, playSEOnCtx } from './se-audio-engine.js';
+import {
+  state, app, ensureLayers, pullLayerToState, replaceLayersWithSingleFromFlat, pushActiveToLayers
+} from './se-state.js';
+import {
+  initAudio, audioCtx, analyser, masterGain,
+  playAnyParamsOnCtx, estimatePlaybackDurationMs
+} from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
-import { updateParam, syncVolumeSlider } from './se-editor-ui.js';
+import { updateParam, syncVolumeSlider, renderLayerStrip } from './se-editor-ui.js';
 import { t } from './se-i18n.js';
 
 export const CMP = {
@@ -19,6 +24,7 @@ function cmpSnapshotState() {
 
 export function cmpAddSlot(params, name) {
   if (CMP.slots.length >= CMP.maxSlots) { showToast(t('toast.maxSlots')); return; }
+  if (!params) pushActiveToLayers();
   const p = params || cmpSnapshotState();
   const id = Date.now() + Math.random();
   CMP.slots.push({ id, name: name || t('cmp.slot', SLOT_LABELS[CMP.slots.length]), params: p, animId: null });
@@ -35,6 +41,7 @@ export function cmpDeleteSlot(id) {
 export function cmpCaptureSlot(id) {
   const slot = CMP.slots.find(s => s.id === id);
   if (!slot) return;
+  pushActiveToLayers();
   slot.params = cmpSnapshotState();
   slot.name = app.activePreset || slot.name;
   cmpRender();
@@ -45,6 +52,13 @@ export function cmpLoadToEditor(id) {
   if (!slot) return;
 
   Object.assign(state, slot.params);
+
+  if (state.layers && Array.isArray(state.layers) && state.layers.length > 0) {
+    ensureLayers();
+    pullLayerToState(state.activeLayerIndex ?? 0);
+  } else {
+    replaceLayersWithSingleFromFlat();
+  }
 
   const ids = ['attack', 'decay', 'release', 'frequency', 'sweep', 'cutoff', 'resonance', 'distortion', 'reverb', 'vibrato', 'duration'];
   ids.forEach((k) => {
@@ -60,6 +74,7 @@ export function cmpLoadToEditor(id) {
   if (state.filterType) document.getElementById('filterType').value = state.filterType;
 
   syncVolumeSlider();
+  renderLayerStrip();
 
   document.getElementById('presetInfoName').textContent = slot.name;
   document.getElementById('presetInfoDesc').textContent = t('info.fromCmp');
@@ -73,13 +88,13 @@ export function cmpPlaySlot(id) {
 
   initAudio();
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  playSEOnCtx(audioCtx, masterGain, slot.params);
+  playAnyParamsOnCtx(audioCtx, masterGain, slot.params);
 
   // Flash badge
   const badge = document.getElementById(`cmp-badge-${id}`);
   if (badge) {
     badge.classList.add('visible');
-    setTimeout(() => badge.classList.remove('visible'), Math.min(slot.params.duration + slot.params.release + 200, 2000));
+    setTimeout(() => badge.classList.remove('visible'), estimatePlaybackDurationMs(slot.params));
   }
 
   // Draw waveform once
@@ -133,12 +148,12 @@ export function cmpPlayAll() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
 
   CMP.slots.forEach((slot) => {
-    playSEOnCtx(audioCtx, masterGain, slot.params);
+    playAnyParamsOnCtx(audioCtx, masterGain, slot.params);
     cmpDrawWaveform(slot.id);
     const badge = document.getElementById(`cmp-badge-${slot.id}`);
     if (badge) {
       badge.classList.add('visible');
-      setTimeout(() => badge.classList.remove('visible'), Math.min(slot.params.duration + slot.params.release + 200, 2000));
+      setTimeout(() => badge.classList.remove('visible'), estimatePlaybackDurationMs(slot.params));
     }
   });
 }
@@ -154,16 +169,16 @@ export function cmpPlaySequential() {
   CMP.slots.forEach((slot) => {
     const d = delay;
     CMP.seqTimer = setTimeout(() => {
-      playSEOnCtx(audioCtx, masterGain, slot.params);
+      playAnyParamsOnCtx(audioCtx, masterGain, slot.params);
       cmpDrawWaveform(slot.id);
       const badge = document.getElementById(`cmp-badge-${slot.id}`);
       if (badge) {
         badge.classList.add('visible');
-        setTimeout(() => badge.classList.remove('visible'), Math.min(slot.params.duration + slot.params.release + 200, 2000));
+        setTimeout(() => badge.classList.remove('visible'), estimatePlaybackDurationMs(slot.params));
       }
     }, d);
 
-    delay += Math.min(slot.params.duration + slot.params.release + 300, 2500);
+    delay += Math.min(estimatePlaybackDurationMs(slot.params) + 100, 2800);
   });
 }
 
