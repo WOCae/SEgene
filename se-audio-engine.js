@@ -333,7 +333,10 @@ export async function exportWAV() {
   pushActiveToLayers();
   const dur = computeMixDurationSec(state);
   const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-  playLayersOnCtx(offCtx, offCtx.destination, state);
+  const offGain = offCtx.createGain();
+  offGain.gain.value = state.exportAtPlaybackVolume ? Math.max(0, Math.min(1, state.volume)) : 1;
+  offGain.connect(offCtx.destination);
+  playLayersOnCtx(offCtx, offGain, state);
   const rendered = await offCtx.startRendering();
   const wav = encodeWAV(rendered);
   const blob = new Blob([wav], { type: 'audio/wav' });
@@ -354,7 +357,10 @@ export async function exportMP3() {
   pushActiveToLayers();
   const dur = computeMixDurationSec(state);
   const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-  playLayersOnCtx(offCtx, offCtx.destination, state);
+  const offGain = offCtx.createGain();
+  offGain.gain.value = state.exportAtPlaybackVolume ? Math.max(0, Math.min(1, state.volume)) : 1;
+  offGain.connect(offCtx.destination);
+  playLayersOnCtx(offCtx, offGain, state);
   const rendered = await offCtx.startRendering();
 
   const sampleRate = rendered.sampleRate;
@@ -424,8 +430,8 @@ export async function exportOGG() {
 
   const recorderDest = audioCtx.createMediaStreamDestination();
   const exportGain = audioCtx.createGain();
-  // Keep same semantics as exportWAV(): it doesn't apply `state.volume`
-  exportGain.gain.value = 1;
+  // Default: 0dB固定（state.exportAtPlaybackVolume が true の場合のみ state.volume を適用）
+  exportGain.gain.value = state.exportAtPlaybackVolume ? Math.max(0, Math.min(1, state.volume)) : 1;
   exportGain.connect(recorderDest);
 
   let recorder;
@@ -473,18 +479,32 @@ function _hasLayers(p) {
   return p && Array.isArray(p.layers) && p.layers.length > 0;
 }
 
+/** params.volume を適用するゲイン値を返す（state.exportAtPlaybackVolume が false なら常に 1） */
+function _exportGainValue(params) {
+  if (!state.exportAtPlaybackVolume) return 1;
+  const v = params?.volume;
+  return (typeof v === 'number' && Number.isFinite(v)) ? Math.max(0, Math.min(1, v)) : 1;
+}
+
 export async function renderParamsToWAV(params) {
   initAudio();
+  const gainVal = _exportGainValue(params);
   if (_hasLayers(params)) {
     const dur = computeMixDurationSec(params);
     const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-    playLayersOnCtx(offCtx, offCtx.destination, params);
+    const offGain = offCtx.createGain();
+    offGain.gain.value = gainVal;
+    offGain.connect(offCtx.destination);
+    playLayersOnCtx(offCtx, offGain, params);
     const rendered = await offCtx.startRendering();
     return encodeWAV(rendered);
   }
   const dur = params.duration / 1000 + params.release / 1000 + 0.3;
   const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-  playSEOnCtx(offCtx, offCtx.destination, params);
+  const offGain = offCtx.createGain();
+  offGain.gain.value = gainVal;
+  offGain.connect(offCtx.destination);
+  playSEOnCtx(offCtx, offGain, params);
   const rendered = await offCtx.startRendering();
   return encodeWAV(rendered);
 }
@@ -493,16 +513,23 @@ export async function renderParamsToMP3(params) {
   initAudio();
   const lame = window.lamejs;
   if (!lame) return null;
+  const gainVal = _exportGainValue(params);
   let rendered;
   if (_hasLayers(params)) {
     const dur = computeMixDurationSec(params);
     const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-    playLayersOnCtx(offCtx, offCtx.destination, params);
+    const offGain = offCtx.createGain();
+    offGain.gain.value = gainVal;
+    offGain.connect(offCtx.destination);
+    playLayersOnCtx(offCtx, offGain, params);
     rendered = await offCtx.startRendering();
   } else {
     const dur = params.duration / 1000 + params.release / 1000 + 0.3;
     const offCtx = new OfflineAudioContext(2, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
-    playSEOnCtx(offCtx, offCtx.destination, params);
+    const offGain = offCtx.createGain();
+    offGain.gain.value = gainVal;
+    offGain.connect(offCtx.destination);
+    playSEOnCtx(offCtx, offGain, params);
     rendered = await offCtx.startRendering();
   }
   const sampleRate = rendered.sampleRate;
@@ -541,7 +568,7 @@ export async function renderParamsToOGG(params) {
   if (audioCtx.state === 'suspended') await audioCtx.resume();
   const recDest = audioCtx.createMediaStreamDestination();
   const gain = audioCtx.createGain();
-  gain.gain.value = 1;
+  gain.gain.value = _exportGainValue(params);
   gain.connect(recDest);
   let recorder;
   const chunks = [];

@@ -455,6 +455,13 @@
 
     <div>
       <div class="panel-section-title">EXPORT</div>
+      <div class="toggle-row" style="margin-bottom:8px">
+        <span class="toggle-label" data-i18n="export.atPlaybackVol" title="デフォルト: 0dB固定で書き出し。ONにすると再生音量（VOL）を適用して書き出します。">再生音量で書き出す</span>
+        <label class="toggle">
+          <input type="checkbox" id="exportAtPlaybackVolume" onchange="toggleExportAtPlaybackVolume(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <button class="btn-export" onclick="exportWAV()">⬇ EXPORT WAV</button>
       <button class="btn-export" onclick="exportOGG()" style="margin-top:8px;">⬇ EXPORT OGG</button>
       <button class="btn-export" onclick="exportMP3()" style="margin-top:8px;">⬇ EXPORT MP3</button>

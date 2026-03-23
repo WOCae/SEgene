@@ -214,8 +214,8 @@
       font-size: 12px;
       letter-spacing: 1px;
     }
-    /* "Web Audio API" badge は省スペースのため非表示 */
-    header > .badge:first-of-type {
+    /* "Web Audio API" badge は省スペースのため非表示（span限定・buttonは除外） */
+    header > span.badge:first-of-type {
       display: none;
     }
     .badge {

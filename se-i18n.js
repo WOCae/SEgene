@@ -106,6 +106,9 @@ const STRINGS = {
     'toast.processing': '{0}件を {1} で処理中…',
     'toast.exportedCount': '{0}件をエクスポートしました',
 
+    // Export
+    'export.atPlaybackVol': '再生音量で書き出す',
+
     // Right panel
     'tb.addBtn': '＋ 現在を保存',
     'tb.clearBtn': '全消去',
@@ -270,6 +273,9 @@ const STRINGS = {
     'library.addPrompt': 'Enter SE name:',
     'toast.processing': 'Processing {0} items as {1}…',
     'toast.exportedCount': 'Exported {0} item(s)',
+
+    // Export
+    'export.atPlaybackVol': 'Export at playback volume',
 
     // Right panel
     'tb.addBtn': '＋ Save Current',

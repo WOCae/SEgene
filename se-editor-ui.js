@@ -53,6 +53,11 @@ export function updateParam(id, val) {
   if (el) el.textContent = labels[id] || v;
 }
 
+function _volToDBStr(v) {
+  if (v <= 0) return '-∞dB';
+  return (20 * Math.log10(v)).toFixed(1) + 'dB';
+}
+
 export function syncVolumeSlider() {
   const el = document.getElementById('volume');
   const lab = document.getElementById('vVol');
@@ -65,19 +70,20 @@ export function syncVolumeSlider() {
   state.volume = v;
   const pct = Math.round(v * 100);
   el.value = String(pct);
-  lab.textContent = pct + '%';
+  lab.textContent = pct + '% / ' + _volToDBStr(v);
   if (masterGain) masterGain.gain.value = v;
 
   const mEl = document.getElementById('mobileVolume');
   const mLab = document.getElementById('mobileVol');
   if (mEl) mEl.value = String(pct);
-  if (mLab) mLab.textContent = pct + '%';
+  if (mLab) mLab.textContent = pct + '% / ' + _volToDBStr(v);
 }
 
 export function updateVolume(val) {
-  state.volume = val / 100;
-  document.getElementById('vVol').textContent = val + '%';
-  if (masterGain) masterGain.gain.value = val / 100;
+  const v = val / 100;
+  state.volume = v;
+  document.getElementById('vVol').textContent = val + '% / ' + _volToDBStr(v);
+  if (masterGain) masterGain.gain.value = v;
   scheduleSessionSave();
 }
 

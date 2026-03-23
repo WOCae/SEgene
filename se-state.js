@@ -27,6 +27,7 @@ export function defaultSynthParams() {
 export const state = {
   ...defaultSynthParams(),
   volume: 0.8,
+  exportAtPlaybackVolume: false,
   autoPlayOnEdit: true,
   /** @type {SeLayer[]|null} */
   layers: null,

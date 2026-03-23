@@ -13,7 +13,7 @@ import {
   dbRenameItemInSubTab
 } from './se-db.js';
 import { t } from './se-i18n.js';
-import { renderParamsToWAV, renderParamsToMP3, renderParamsToOGG } from './se-audio-engine.js';
+import { renderParamsToWAV, renderParamsToMP3, renderParamsToOGG, computeMixDurationSec } from './se-audio-engine.js';
 import { refreshLibraryTabs } from './se-library-ui.js';
 import { debugLibrary } from './se-debug.js';
 
@@ -268,6 +268,53 @@ export async function renameUserItem(id) {
 
 // --- Bulk ZIP export helpers ---
 
+function _fmtNum(v, digits = 2) {
+  return (v == null ? '?' : Number(v).toFixed(digits));
+}
+
+function _manifestLayerLine(layer) {
+  const muted = layer.muted ? ' [muted]' : '';
+  return `- **Layer** "${layer.name || layer.id}"${muted} mix=${_fmtNum(layer.mix)} delay=${layer.delayMs ?? 0}ms:` +
+    ` wave=${layer.wave} freq=${Math.round(layer.frequency ?? 0)}Hz` +
+    ` A=${Math.round(layer.attack ?? 0)} D=${Math.round(layer.decay ?? 0)}` +
+    ` S=${_fmtNum(layer.sustain)} R=${Math.round(layer.release ?? 0)}`;
+}
+
+function _manifestEntry(filename, item) {
+  const p = item.params || {};
+  const lines = [`### ${filename}`];
+  if (p.presetVersion === 2 && Array.isArray(p.layers) && p.layers.length) {
+    const durMs = Math.round(computeMixDurationSec(p) * 1000);
+    lines.push(`- **Duration:** ${durMs} ms | **Layers:** ${p.layers.length}`);
+    for (const layer of p.layers) lines.push(_manifestLayerLine(layer));
+  } else {
+    lines.push(`- **Duration:** ${Math.round(p.duration ?? 0)} ms`);
+    lines.push(`- **Wave:** ${p.wave ?? '?'} | **Frequency:** ${Math.round(p.frequency ?? 0)} Hz`);
+    lines.push(`- **ADSR:** A=${Math.round(p.attack ?? 0)}ms D=${Math.round(p.decay ?? 0)}ms` +
+      ` S=${_fmtNum(p.sustain)} R=${Math.round(p.release ?? 0)}ms`);
+    lines.push(`- **Filter:** ${p.filterType ?? 'lowpass'} | Cutoff=${Math.round(p.cutoff ?? 0)}Hz Resonance=${_fmtNum(p.resonance)}`);
+    lines.push(`- **Effects:** Reverb=${_fmtNum(p.reverb)} Distortion=${_fmtNum(p.distortion)} Vibrato=${_fmtNum(p.vibrato)}`);
+  }
+  return lines.join('\n');
+}
+
+function _buildManifestMarkdown({ gameName, subtabName, format, exportedAt, sections }) {
+  const lines = [`# SE Manifest — ${gameName}`, ''];
+  if (subtabName) lines.push(`- **Subtab:** ${subtabName}`);
+  lines.push(`- **Format:** ${format.toUpperCase()}`);
+  lines.push(`- **Generated:** ${exportedAt}`);
+  lines.push('');
+  for (const { sectionName, entries } of sections) {
+    if (sectionName) { lines.push(`## ${sectionName}`, ''); }
+    else { lines.push('## Files', ''); }
+    for (const { filename, item } of entries) {
+      lines.push(_manifestEntry(filename, item));
+      lines.push('');
+    }
+  }
+  return lines.join('\n');
+}
+
 function _safeName(s) {
   return (s || 'item').replace(/[^\w\u3040-\u9fff\-]/g, '_');
 }
@@ -301,11 +348,23 @@ export async function exportSubTabZip(format) {
   showToast(t('toast.processing', items.length, format.toUpperCase()));
   const zip = new JSZip();
   let count = 0;
+  const manifestEntries = [];
   for (const item of items) {
     const result = await _renderItem(format, item.params);
-    if (result?.data) { zip.file(`${_safeName(item.name)}.${result.ext}`, result.data); count++; }
+    if (result?.data) {
+      const filename = `${_safeName(item.name)}.${result.ext}`;
+      zip.file(filename, result.data);
+      manifestEntries.push({ filename, item });
+      count++;
+    }
   }
   if (!count) { showToast(t('library.noItems')); return; }
+  const md = _buildManifestMarkdown({
+    gameName: game.name, subtabName: subTab.name, format,
+    exportedAt: new Date().toISOString().slice(0, 10),
+    sections: [{ sectionName: null, entries: manifestEntries }]
+  });
+  zip.file('_manifest.md', md);
   await _buildAndDownloadZip(zip, `${_safeName(subTab.name)}_${format}.zip`);
   showToast(t('toast.exportedCount', count));
 }
@@ -319,18 +378,32 @@ export async function exportGameZip(format) {
   const game = await dbGetUserGame(gId);
   if (!game) return;
   const totalItems = (game.subtabs || []).reduce((s, st) => s + (st.items || []).length, 0);
-  if (!totalItems) { showToast('アイテムがありません'); return; }
+  if (!totalItems) { showToast(t('library.noItems')); return; }
   showToast(t('toast.processing', totalItems, format.toUpperCase()));
   const zip = new JSZip();
   let count = 0;
+  const manifestSections = [];
   for (const st of (game.subtabs || [])) {
     const folder = zip.folder(_safeName(st.name));
+    const sectionEntries = [];
     for (const item of (st.items || [])) {
       const result = await _renderItem(format, item.params);
-      if (result?.data) { folder.file(`${_safeName(item.name)}.${result.ext}`, result.data); count++; }
+      if (result?.data) {
+        const filename = `${_safeName(item.name)}.${result.ext}`;
+        folder.file(filename, result.data);
+        sectionEntries.push({ filename: `${_safeName(st.name)}/${filename}`, item });
+        count++;
+      }
     }
+    if (sectionEntries.length) manifestSections.push({ sectionName: st.name, entries: sectionEntries });
   }
   if (!count) { showToast(t('library.noItems')); return; }
+  const md = _buildManifestMarkdown({
+    gameName: game.name, subtabName: null, format,
+    exportedAt: new Date().toISOString().slice(0, 10),
+    sections: manifestSections
+  });
+  zip.file('_manifest.md', md);
   await _buildAndDownloadZip(zip, `${_safeName(game.name)}_${format}.zip`);
   showToast(t('toast.exportedCount', count));
 }

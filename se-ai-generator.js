@@ -238,8 +238,20 @@ let _lastResult = null;
 
 // ── Public: open / close ──────────────────────────────────────────────────────
 function _buildSystemPrompt(layerMode, maxLayers) {
-  if (!layerMode) return SYSTEM_PROMPT_SINGLE;
-  return SYSTEM_PROMPT_LAYERS.replace(/\{\{MAX_LAYERS\}\}/g, String(maxLayers));
+  const base = layerMode
+    ? SYSTEM_PROMPT_LAYERS.replace(/\{\{MAX_LAYERS\}\}/g, String(maxLayers))
+    : SYSTEM_PROMPT_SINGLE;
+  if (getLang() === 'en') {
+    return base + `
+
+## Language Mode
+The user's UI language is English. Generate all text fields in English:
+- "name": English name (max 20 chars)
+- "nameEn": Same English name as "name"
+- "desc": Short English description of the sound
+- Layer names: English labels only (e.g. "attack", "body", "tail", "click")`;
+  }
+  return base;
 }
 
 export function openAiGenerator() {
@@ -361,7 +373,10 @@ export function aiGenApply() {
   if (!_lastResult) return;
   _applyToState(_lastResult);
   closeAiGenerator();
-  showToast(t('aiGen.applied', _lastResult.name || _lastResult.nameEn));
+  const toastName = getLang() === 'en'
+    ? (_lastResult.nameEn || _lastResult.name)
+    : (_lastResult.name   || _lastResult.nameEn);
+  showToast(t('aiGen.applied', toastName));
 }
 
 // ── Init: render example chips ─────────────────────────────────────────────
@@ -772,7 +787,8 @@ function _showResult(result) {
   _lastResult = result;
   area.style.display = 'block';
 
-  document.getElementById('aiGenResultName').textContent = result.name;
+  const displayName = getLang() === 'en' ? (result.nameEn || result.name) : result.name;
+  document.getElementById('aiGenResultName').textContent = displayName;
   document.getElementById('aiGenResultDesc').textContent = result.desc;
 
   if (result.mode === 'layers') {

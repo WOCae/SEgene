@@ -175,6 +175,7 @@ Object.assign(window, {
   pseqToggleMute,
   togglePseq,
   toggleAutoPlayOnEdit,
+  toggleExportAtPlaybackVolume,
   layerSelect,
   layerAdd,
   layerRemove,
@@ -268,6 +269,16 @@ function toggleAutoPlayOnEdit(checked) {
   if (!state.autoPlayOnEdit) clearTimeout(_editAutoTimer);
   scheduleSessionSave();
   syncAutoPlayToggleUI();
+}
+
+function syncExportAtPlaybackVolumeUI() {
+  const cb = document.getElementById('exportAtPlaybackVolume');
+  if (cb) cb.checked = !!state.exportAtPlaybackVolume;
+}
+
+function toggleExportAtPlaybackVolume(checked) {
+  state.exportAtPlaybackVolume = !!checked;
+  scheduleSessionSave();
 }
 
 initAutoPlayOnEdit();
@@ -591,8 +602,9 @@ async function restoreSessionData(session) {
   // Rebuild library UI after session restore
   await refreshLibraryTabs();
 
-  // Restore -> reflect auto-play toggle UI
+  // Restore -> reflect toggle UIs
   syncAutoPlayToggleUI();
+  syncExportAtPlaybackVolumeUI();
 
   drawWaveform();
   syncVolumeSlider();
