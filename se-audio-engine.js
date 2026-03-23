@@ -409,7 +409,10 @@ export async function exportOGG() {
   const candidates = [
     'audio/ogg;codecs=opus',
     'audio/ogg; codecs=opus',
-    'audio/ogg'
+    'audio/ogg',
+    'audio/webm;codecs=opus',
+    'audio/webm; codecs=opus',
+    'audio/webm'
   ];
   let mimeType = null;
   for (const t of candidates) {
@@ -469,9 +472,10 @@ export async function exportOGG() {
   }
 
   const blob = new Blob(chunks, { type: mimeType });
+  const ext = mimeType.startsWith('audio/webm') ? '.webm' : '.ogg';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (app.activePreset || 'se') + '.ogg';
+  a.download = (app.activePreset || 'se') + ext;
   a.click();
 }
 
@@ -559,7 +563,8 @@ export async function renderParamsToOGG(params) {
   initAudio();
   const AudioRec = window.MediaRecorder;
   if (!AudioRec) return null;
-  const candidates = ['audio/ogg;codecs=opus', 'audio/ogg; codecs=opus', 'audio/ogg'];
+  const candidates = ['audio/ogg;codecs=opus', 'audio/ogg; codecs=opus', 'audio/ogg',
+    'audio/webm;codecs=opus', 'audio/webm; codecs=opus', 'audio/webm'];
   let mimeType = null;
   for (const mt of candidates) {
     try { if (AudioRec.isTypeSupported?.(mt)) { mimeType = mt; break; } } catch {}
