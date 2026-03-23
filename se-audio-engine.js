@@ -472,10 +472,9 @@ export async function exportOGG() {
   }
 
   const blob = new Blob(chunks, { type: mimeType });
-  const ext = mimeType.startsWith('audio/webm') ? '.webm' : '.ogg';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = (app.activePreset || 'se') + ext;
+  a.download = (app.activePreset || 'se') + '.ogg';
   a.click();
 }
 
