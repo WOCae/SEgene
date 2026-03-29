@@ -41,6 +41,8 @@ import {
   saveCurrentPreset,
   saveParamsToLibrary,
   exportAllJSON,
+  saveGameJSONAs,
+  overwriteGameJSON,
   importJSON,
   loadUserPreset,
   deleteUserPreset,
@@ -56,6 +58,7 @@ import { tbAdd, tbClearAll, tbPlay, tbLoadToEditor, tbDelete, tbDragStart, tbDra
 import { showToast } from './se-toast.js';
 import { state, app, ensureLayers } from './se-state.js';
 import { setSessionSaver, dbSaveSession, dbRestoreSession, migrateFromLocalStorage, scheduleSessionSave } from './se-db.js';
+import { collectJsonFileHandlesForSession, restoreJsonFileHandlesFromSession } from './se-json-fs.js';
 import { t, setLang, getLang, applyI18n } from './se-i18n.js';
 import { openAiGenerator, closeAiGenerator, aiGenOnProviderChange, aiGenOnModelSelectChange, aiGenOnLayerModeChange, aiGenSetExample, aiGenGenerate, aiGenPreview, aiGenApply, aiGenRefreshModels, initAiGenerator } from './se-ai-generator.js';
 
@@ -137,6 +140,8 @@ Object.assign(window, {
   saveCurrentPreset,
   saveParamsToLibrary,
   exportAllJSON,
+  saveGameJSONAs,
+  overwriteGameJSON,
   importJSON,
   setCategory,
   selectBuiltInLibrary,
@@ -497,12 +502,17 @@ function collectSession() {
       oct:   document.getElementById('pseqOct')?.value   || '4',
       range: document.getElementById('pseqRange')?.value || '2',
     },
+    jsonFileHandles: collectJsonFileHandlesForSession(),
   };
 }
 
 // ---------- Session: 復元 ----------
 
 async function restoreSessionData(session) {
+  if (session.jsonFileHandles) {
+    restoreJsonFileHandlesFromSession(session.jsonFileHandles);
+  }
+
   // SE パラメータ
   if (session.state) {
     Object.assign(state, session.state);

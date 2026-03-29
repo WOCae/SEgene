@@ -56,6 +56,10 @@
           <input type="file" accept=".json" onchange="importJSON(event)" style="display:none">
         </label>
       </div>
+      <div class="library-json-row">
+        <button class="btn-secondary" style="font-size:11px;flex:1" onclick="saveGameJSONAs()" data-i18n="preset.saveAsJson">💾 名前を付けて保存 (.json)</button>
+        <button class="btn-secondary" style="font-size:11px;flex:1" onclick="overwriteGameJSON()" data-i18n="preset.saveJsonOverwrite">上書き保存 (.json)</button>
+      </div>
       <div class="section-divider">Selection</div>
       <div class="library-select-row">
         <label class="library-label">Game</label>

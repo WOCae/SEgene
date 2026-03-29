@@ -10,8 +10,15 @@ import {
   dbCreateUserSubTab,
   dbAddItemToSubTab,
   dbDeleteItemFromSubTab,
-  dbRenameItemInSubTab
+  dbRenameItemInSubTab,
+  scheduleSessionSave
 } from './se-db.js';
+import {
+  hasFileSystemAccess,
+  setLinkedJsonFileHandle,
+  getLinkedJsonFileHandle,
+  writeBlobToFileHandle
+} from './se-json-fs.js';
 import { t } from './se-i18n.js';
 import { renderParamsToWAV, renderParamsToMP3, renderParamsToOGG, computeMixDurationSec } from './se-audio-engine.js';
 import { refreshLibraryTabs } from './se-library-ui.js';
@@ -170,6 +177,22 @@ export async function loadUserPreset(id) {
   }
 }
 
+/** @param {*} game dbGetUserGame の結果 */
+export function gameToJsonBlob(game) {
+  const json = JSON.stringify({
+    version: 1,
+    type: 'game',
+    game: {
+      name: game.name,
+      subtabs: (game.subtabs || []).map(st => ({
+        name: st.name,
+        items: (st.items || []).map(({ name, params, updatedAt }) => ({ name, params, updatedAt }))
+      }))
+    }
+  }, null, 2);
+  return new Blob([json], { type: 'application/json' });
+}
+
 export async function exportAllJSON() {
   const { gameId } = _getModalSelection();
   const gId = gameId ?? app.activeUserGameId;
@@ -180,22 +203,90 @@ export async function exportAllJSON() {
   const totalItems = (game.subtabs || []).reduce((s, st) => s + (st.items || []).length, 0);
   if (!totalItems) { showToast(t('toast.noPresets')); return; }
 
-  const blob = new Blob([JSON.stringify({
-    version: 1,
-    type: 'game',
-    game: {
-      name: game.name,
-      subtabs: (game.subtabs || []).map(st => ({
-        name: st.name,
-        items: (st.items || []).map(({ name, params, updatedAt }) => ({ name, params, updatedAt }))
-      }))
-    }
-  }, null, 2)], { type: 'application/json' });
+  const blob = gameToJsonBlob(game);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = game.name.replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
   a.click();
   showToast(t('toast.exported', totalItems));
+}
+
+/** 名前を付けて保存: Chromium はファイルピッカー＋ハンドル紐づけ、その他はダウンロードにフォールバック */
+export async function saveGameJSONAs() {
+  const { gameId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  if (!gId) { showToast(t('library.selectGame')); return; }
+  const game = await dbGetUserGame(gId);
+  if (!game) return;
+
+  const totalItems = (game.subtabs || []).reduce((s, st) => s + (st.items || []).length, 0);
+  if (!totalItems) { showToast(t('toast.noPresets')); return; }
+
+  const blob = gameToJsonBlob(game);
+  const sid = String(gId);
+
+  if (hasFileSystemAccess()) {
+    try {
+      const suggested = game.name.replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggested,
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+      });
+      await writeBlobToFileHandle(handle, blob);
+      setLinkedJsonFileHandle(sid, handle);
+      scheduleSessionSave();
+      showToast(t('toast.jsonLinkedSave'));
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      console.error('[SEgene] saveGameJSONAs', e);
+      showToast(t('toast.jsonSaveFailed'));
+    }
+    return;
+  }
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = game.name.replace(/[^\w\u3040-\u9fff]/g, '_') + '.json';
+  a.click();
+  showToast(t('toast.exported', totalItems));
+}
+
+/** 紐づいたファイルへ上書き（File System Access API 対応ブラウザのみ） */
+export async function overwriteGameJSON() {
+  const { gameId } = _getModalSelection();
+  const gId = gameId ?? app.activeUserGameId;
+  if (!gId) { showToast(t('library.selectGame')); return; }
+  const game = await dbGetUserGame(gId);
+  if (!game) return;
+
+  const totalItems = (game.subtabs || []).reduce((s, st) => s + (st.items || []).length, 0);
+  if (!totalItems) { showToast(t('toast.noPresets')); return; }
+
+  const blob = gameToJsonBlob(game);
+  const sid = String(gId);
+
+  if (!hasFileSystemAccess()) {
+    showToast(t('toast.jsonOverwriteNoFs'));
+    return;
+  }
+
+  const handle = getLinkedJsonFileHandle(sid);
+  if (!handle) {
+    showToast(t('toast.jsonNoLinkedFile'));
+    return;
+  }
+
+  try {
+    await writeBlobToFileHandle(handle, blob);
+    showToast(t('toast.jsonSavedOverwrite'));
+  } catch (e) {
+    if (e?.code === 'PERMISSION_DENIED' || /permission/i.test(String(e?.message))) {
+      showToast(t('toast.jsonWriteDenied'));
+    } else {
+      console.error('[SEgene] overwriteGameJSON', e);
+      showToast(t('toast.jsonSaveFailed'));
+    }
+  }
 }
 
 export function importJSON(event) {
@@ -224,7 +315,9 @@ export function importJSON(event) {
       app.activeUserSubTabId = null;
       await refreshLibraryTabs();
       debugLibrary('importJSON OK', { newGameId: newGame.id, gameName, itemCount, activeUserGameId: app.activeUserGameId, activeUserSubTabId: app.activeUserSubTabId });
-      showToast(t('toast.imported', itemCount));
+      let msg = t('toast.imported', itemCount);
+      if (hasFileSystemAccess()) msg += ' ' + t('toast.importLinkHint');
+      showToast(msg);
     } catch (err) {
       console.error('[SEgene library] importJSON failed', err);
       debugLibrary('importJSON error (see console.error above)');

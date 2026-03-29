@@ -2,6 +2,10 @@
 
 ブラウザ上でゲーム向け SE を合成・試聴・書き出しする静的ツールです。
 
+## ライセンス
+
+[MIT License](./LICENSE)（Copyright (c) 2026 WOCae）
+
 ## ドキュメント
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — ファイル構成・データフロー・改修の目印（`// ──` セクション境界など）

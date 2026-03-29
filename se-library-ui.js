@@ -18,6 +18,7 @@ import {
   dbReorderUserGames,
   dbReorderUserSubTabs
 } from './se-db.js';
+import { removeLinkedJsonFileHandle } from './se-json-fs.js';
 import { getLang, t } from './se-i18n.js';
 
 let _draggingGameId = null;
@@ -487,6 +488,8 @@ export async function deleteUserGame() {
   if (!ok) return;
   const gameId = app.activeUserGameId;
   await dbDeleteUserGame(gameId);
+  removeLinkedJsonFileHandle(gameId);
+  scheduleSessionSave();
   app.activeUserGameId = null;
   app.activeUserSubTabId = null;
   await refreshLibraryTabs();
