@@ -1,5 +1,5 @@
 import { state, app, ensureLayers, pullLayerToState, replaceLayersWithSingleFromFlat } from './se-state.js';
-import { initAudio, audioCtx, masterGain, playAnyParamsOnCtx, estimatePlaybackDurationMs } from './se-audio-engine.js';
+import { audioCtx, masterGain, playAnyParamsOnCtx, estimatePlaybackDurationMs, ensureAudioRunning } from './se-audio-engine.js';
 import { showToast } from './se-toast.js';
 import { updateParam, syncVolumeSlider, renderLayerStrip } from './se-editor-ui.js';
 import { dbGetTempBoard, dbSaveTempBoard } from './se-db.js';
@@ -40,12 +40,11 @@ export function tbClearAll() {
   showToast(t('toast.tbCleared'));
 }
 
-export function tbPlay(id) {
+export async function tbPlay(id) {
   const card = tbCards.find(c => c.id === id);
   if (!card) return;
 
-  initAudio();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  await ensureAudioRunning();
   playAnyParamsOnCtx(audioCtx, masterGain, card.params);
 
   // Animate playing line

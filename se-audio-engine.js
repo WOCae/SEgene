@@ -61,6 +61,22 @@ export function initAudio() {
   drawWaveform();
 }
 
+/**
+ * モバイル（特に iOS Safari）では AudioContext が suspended のまま
+ * `resume()` の Promise を待たずに `start()` すると無音になり得る。
+ * 再生直前に必ず await すること。
+ */
+export async function ensureAudioRunning() {
+  initAudio();
+  if (audioCtx.state === 'suspended') {
+    try {
+      await audioCtx.resume();
+    } catch {
+      // ユーザージェスチャーが無い場合は autoplay ポリシーで拒否され得る
+    }
+  }
+}
+
 export function drawWaveform() {
   if (!document.getElementById('canvas')) return;
   _initCanvasResize();
@@ -320,9 +336,8 @@ export function estimatePlaybackDurationMs(flatOrState) {
   return Math.min((p.duration || 500) + (p.release || 200) + 200, 4000);
 }
 
-export function playSE() {
-  initAudio();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+export async function playSE() {
+  await ensureAudioRunning();
   pushActiveToLayers();
   playLayersOnCtx(audioCtx, masterGain, state);
   startWaveform(); // 無音でRAFが停止していた場合に再開
@@ -429,7 +444,7 @@ export async function exportOGG() {
   try { stopArpIfPlaying(); } catch {}
   try { stopPseqIfPlaying(); } catch {}
 
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  await ensureAudioRunning();
 
   const recorderDest = audioCtx.createMediaStreamDestination();
   const exportGain = audioCtx.createGain();
@@ -569,7 +584,7 @@ export async function renderParamsToOGG(params) {
     try { if (AudioRec.isTypeSupported?.(mt)) { mimeType = mt; break; } } catch {}
   }
   if (!mimeType) return null;
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  await ensureAudioRunning();
   const recDest = audioCtx.createMediaStreamDestination();
   const gain = audioCtx.createGain();
   gain.gain.value = _exportGainValue(params);

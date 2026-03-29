@@ -1,5 +1,5 @@
 import { state } from './se-state.js';
-import { initAudio, audioCtx, masterGain, playSEOnCtx } from './se-audio-engine.js';
+import { audioCtx, masterGain, playSEOnCtx, ensureAudioRunning } from './se-audio-engine.js';
 import { scheduleSessionSave } from './se-db.js';
 
 export const ARP = {
@@ -75,22 +75,21 @@ function arpStepInterval() {
   const step = ARP.currentStep;
   document.querySelectorAll(`.arp-step[data-step="${step}"]`).forEach(el => el.classList.add('current'));
 
-  initAudio();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-
-  for (let r = 0; r < 4; r++) {
-    if (ARP.grid[r][step]) {
-      const freq = ARP.noteFreqs[r];
-      const noteDur = (60 / ARP.bpm) * (4 / ARP.div) * 1000 * 0.82;
-      playSEOnCtx(audioCtx, masterGain, { ...state, frequency: freq, duration: noteDur, sweep: 0 });
+  ensureAudioRunning().then(() => {
+    for (let r = 0; r < 4; r++) {
+      if (ARP.grid[r][step]) {
+        const freq = ARP.noteFreqs[r];
+        const noteDur = (60 / ARP.bpm) * (4 / ARP.div) * 1000 * 0.82;
+        playSEOnCtx(audioCtx, masterGain, { ...state, frequency: freq, duration: noteDur, sweep: 0 });
+      }
     }
-  }
+  });
   ARP.currentStep = (step + 1) % ARP.steps;
 }
 
-export function arpStart() {
+export async function arpStart() {
   if (ARP.playing) return;
-  initAudio();
+  await ensureAudioRunning();
   ARP.playing = true;
   ARP.currentStep = 0;
 

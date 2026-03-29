@@ -16,7 +16,7 @@
 | `se-state.js` | 共有状態（`state` / `app`）＋ レイヤー操作（`ensureLayers` / `pushActiveToLayers` / `pullLayerToState` / `serializePresetForLibrary` / `applyPresetParamsFromLibrary` 等） | ~220 |
 | `se-toast.js` | Toast 表示（`showToast`） | ~15 |
 | `se-debug.js` | 開発用ログ（`debugLibrary`）。無効: `window.__SEGENE_DEBUG_LIBRARY = false` | ~15 |
-| `se-audio-engine.js` | Web Audio コア（再生/波形/書き出し） | ~430 |
+| `se-audio-engine.js` | Web Audio コア（再生/波形/書き出し）。`ensureAudioRunning()` でモバイル向けに `resume` 完了を待つ | ~450 |
 | `se-editor-ui.js` | エディタ UI（`updateParam` / `renderPresets` / `randomize` / `applyStateToUI` / レイヤー操作 等） | ~390 |
 | `se-library-ui.js` | ライブラリ管理 UI（`refreshLibraryTabs` / `openLibraryModal` / game・subtab の CRUD / drag&drop 並び替え） | ~550 |
 | `se-compare.js` | SE 比較モーダル（CMP スロット管理） | ~240 |
@@ -52,7 +52,7 @@ flowchart LR
   JS --> LS[localStorage\nse-theme / se-lang のみ]
 ```
 
-- **単発再生:** `playSE()` → `initAudio()` → `playSEOnCtx(audioCtx, masterGain, state)`
+- **単発再生:** `playSE()` → `ensureAudioRunning()`（`await audioCtx.resume()`）→ `pushActiveToLayers()` → `playLayersOnCtx(audioCtx, masterGain, state)`
 - **波形表示:** `drawWaveform()` が `requestAnimationFrame` でキャンバスを更新（`analyser` 参照）
 - **エディタ:** スライダーは主に `updateParam(id, val)` で `state` とラベル DOM を同期（値表示の id は通常 `v`+PascalCase(`id`) だが、`frequency`→`vFreq` など省略形は `se-editor-ui.js` 内の labelElIds で対応）
 
@@ -129,7 +129,7 @@ DB 名: `gameSEToolDB` (version 3)
 
 | モジュール | 主な担当 |
 |------------|----------|
-| `se-audio-engine.js` | WebAudio コア（再生/波形/書き出し） |
+| `se-audio-engine.js` | WebAudio コア（再生/波形/書き出し）。`ensureAudioRunning()` |
 | `se-editor-ui.js` | エディタ UI（`updateParam` / `renderPresets` / `loadPreset` / `randomize` / `applyStateToUI` / レイヤー操作 等） |
 | `se-library-ui.js` | ライブラリ管理 UI（`refreshLibraryTabs` / `openLibraryModal` / game・subtab の CRUD / drag&drop 並び替え）。`renderPresets` を `se-editor-ui.js` から import |
 | `se-compare.js` | SE 比較モーダル（CMP） |
@@ -150,6 +150,17 @@ DB 名: `gameSEToolDB` (version 3)
 - **DOM:** 下部 `.mobile-tabbar`（`game-se-tool.html`）、メインレイアウトに `id="appLayout"`。
 - **切替:** 狭い幅では `#appLayout` に `data-mobile-tab="presets" | "edit" | "tools"` を付与。表示は CSS で各ペインの `display` を切り替え。`game-se-tool-entry.js` の `syncMobileTabUI` / `MOBILE_TAB_MQ` がリサイズ時に同期。
 - **既定タブ（モバイル初回）:** `presets`
+
+### モバイルで再生されない・レイヤーだと特に鳴らないように感じる理由
+
+1. **`AudioContext.resume()` は非同期**  
+   モバイル（特に iOS Safari）ではコンテキストが `suspended` のまま起動する。従来コードは `audioCtx.resume()` を **待たず** に直後で `OscillatorNode.start()` 等を呼んでおり、このタイミングずれだけで **無音** になり得る。対策として **`ensureAudioRunning()` で `await audioCtx.resume()` してから** `playLayersOnCtx` / `playSEOnCtx` する（`playSE`・ARP・PSEQ・比較・Temp Board・OGG レンダ系で共通化）。
+
+2. **ユーザージェスチャー外の遅延再生**  
+   `setTimeout(() => playSE(), …)`（スライダーの **編集時自動再生**、JSON 読込後の自動再生など）は、ブラウザによっては **タップの連鎖外** とみなされ、`resume` が拒否されたままになる。レイヤー固有のバグではないが、「触ったのに鳴らない」が **自動再生まわり** で増えやすい。
+
+3. **レイヤーはグラフが重い**  
+   レイヤーごとに `playSEOnCtx` が走り、`reverb > 0` のとき **レイヤー単位で Convolver** が増える。単層より CPU・メモリ負荷が上がり、低スペック端末では **途切れ・無音に近い挙動** が出やすい（体感として「レイヤーだと壊れやすい」と繋がりやすい）。
 
 ---
 
@@ -250,6 +261,7 @@ DB 名: `gameSEToolDB` (version 3)
 
 ## 変更履歴（メンテ用）
 
+- モバイル無音対策: `se-audio-engine.js` に `ensureAudioRunning()`（`await audioCtx.resume()`）、`playSE` および ARP / PSEQ / 比較 / Temp Board / OGG 周辺で利用。`ARCHITECTURE.md` にモバイル再生の注意を追記。
 - Git / `.gitignore` / `README.md`（GitHub 手順）を追加。
 - モバイル（≤900px）: 下部タブでプリセット / 編集 / ツールの3ペイン切替。
 - `se-css-*.css` / `game-se-tool-entry.js`（`se-*` モジュール群） / `presets.js` の分割、`type="module"`、本チートシート。

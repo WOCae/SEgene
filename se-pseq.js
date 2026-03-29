@@ -1,5 +1,5 @@
 import { state } from './se-state.js';
-import { initAudio, audioCtx, masterGain, playSEOnCtx, startWaveform } from './se-audio-engine.js';
+import { audioCtx, masterGain, playSEOnCtx, startWaveform, ensureAudioRunning } from './se-audio-engine.js';
 import { scheduleSessionSave } from './se-db.js';
 
 // 共有ドラッグ状態: document リスナーを1組だけにして累積を防ぐ
@@ -168,18 +168,18 @@ function pseqTick() {
     const note = PSEQ.scaleNotes[n.semitone];
     if (note) {
       const noteDur = (60 / PSEQ.bpm) * (4 / PSEQ.div) * 1000 * 0.80;
-      initAudio();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      playSEOnCtx(audioCtx, masterGain, { ...state, frequency: note.hz, duration: noteDur, sweep: 0 });
-      startWaveform(); // 無音でRAFが停止していた場合に再開
+      ensureAudioRunning().then(() => {
+        playSEOnCtx(audioCtx, masterGain, { ...state, frequency: note.hz, duration: noteDur, sweep: 0 });
+        startWaveform(); // 無音でRAFが停止していた場合に再開
+      });
     }
   }
   PSEQ.currentStep = (step + 1) % PSEQ.len;
 }
 
-export function pseqStart() {
+export async function pseqStart() {
   if (PSEQ.playing) return;
-  initAudio();
+  await ensureAudioRunning();
   PSEQ.playing = true;
   PSEQ.currentStep = 0;
   document.getElementById('pseqStatus').textContent = 'PLAYING';
